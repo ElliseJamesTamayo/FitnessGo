@@ -1617,6 +1617,7 @@ class AuthTbl:
             return False
 
     #ai
+
     def get_or_create_chat(self, user_id):
         if not self.db:
             return None
