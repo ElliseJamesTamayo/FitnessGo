@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Lock, Package } from "lucide-react";
 
-export default function AcceptInvitePage() {
+function AcceptInviteContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
 
@@ -71,8 +71,8 @@ export default function AcceptInvitePage() {
                         <Package className="h-5 w-5" />
                     </div>
                     <span className="text-lg font-semibold">
-            <span className="text-[#2D1B4E]">Stock</span>NBook
-          </span>
+                        <span className="text-[#2D1B4E]">Stock</span>NBook
+                    </span>
                 </div>
 
                 <h1 className="font-serif text-4xl text-[#1A1220]">
@@ -99,9 +99,9 @@ export default function AcceptInvitePage() {
                     </label>
 
                     <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Confirm password
-            </span>
+                        <span className="mb-2 block text-sm font-medium">
+                            Confirm password
+                        </span>
                         <div className="flex items-center gap-3 rounded-lg border border-[#EBE4F0] bg-white px-4 py-3">
                             <Lock className="h-5 w-5 text-[#7A6E88]" />
                             <input
@@ -127,6 +127,10 @@ export default function AcceptInvitePage() {
     );
 }
 
-
-
-
+export default function AcceptInvitePage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <AcceptInviteContent />
+        </Suspense>
+    );
+}

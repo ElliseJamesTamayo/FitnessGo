@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Package } from "lucide-react";
 
-export default function AcceptStaffInvitePage() {
+function AcceptStaffInviteContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -70,8 +70,8 @@ export default function AcceptStaffInvitePage() {
                     </div>
 
                     <span className="text-xl font-semibold">
-            <span className="text-[#2D1B4E]">Stock</span>NBook
-          </span>
+                        <span className="text-[#2D1B4E]">Stock</span>NBook
+                    </span>
                 </div>
 
                 <h1 className="font-serif text-5xl text-[#1A1220]">
@@ -146,6 +146,10 @@ function Input({
     );
 }
 
-
-
-
+export default function AcceptStaffInvitePage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <AcceptStaffInviteContent />
+        </Suspense>
+    );
+}
