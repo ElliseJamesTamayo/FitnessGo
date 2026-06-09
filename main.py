@@ -81,14 +81,12 @@ def normalize_exercise_name(name: str) -> str:
         .strip()
     )
 
-
 def load_image_blob(image_path):
     if not image_path or not os.path.exists(image_path):
         return None
 
     with open(image_path, "rb") as f:
         return f.read()
-
 
 def build_exercise_image_index():
     image_index = {}
@@ -149,8 +147,6 @@ NORMALIZED_IMAGE_MAP = {
     for name, path in EXERCISE_IMAGE_MAP.items()
 }
 
-
-
 FILIPINO_FOODS = {}
 
 def load_filipino_foods():
@@ -172,11 +168,6 @@ def find_filipino_food(food_name):
         if item["name"] == name:
             return item
     return None
-
-
-
-
-from exercise_image_map import EXERCISE_IMAGE_MAP
 
 with open("ExerciseDetails.json", "r", encoding="utf-8") as f:
     EXERCISE_DETAILS = json.load(f)["exercises"]
