@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from kivy.factory import Factory
-from threading import Thread
+
 import mysql.connector
 from random import randint
 import time
@@ -10,8 +10,6 @@ from kivy.metrics import dp
 from kivy.core.text import Label as CoreLabel
 from threading import Thread
 from functools import partial
-from kivy.uix.filechooser import FileChooserIconView
-
 from chatbot.chatbot_service import process_message
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.behaviors import ButtonBehavior
@@ -51,6 +49,7 @@ from exercise_image_map import EXERCISE_IMAGE_MAP
 from moderation_utils import has_profanity
 from my_connector import auth_tbl
 import requests
+import api_client
 import json
 import os
 import re
@@ -319,15 +318,19 @@ class loginScreen(MDScreen):
             self.show_msg("Please enter username and password")
             return
 
-        if not auth_tbl.username_exists(username):
-            self.show_msg("Username does not exist.")
+        # ✅ FastAPI login instead of direct auth_tbl.check_password()
+        result = api_client.login_user(username, password)
+
+        if not result.get("success"):
+            self.show_msg(result.get("message", "Invalid username or password."))
             return
 
-        user_id = auth_tbl.check_password(username, password)
-        if user_id is None:
-            self.show_msg("Incorrect password.")
+        user_id = result.get("UserId") or result.get("user_id")
+        if not user_id:
+            self.show_msg("Login failed: User ID was not returned by API.")
             return
 
+        # TEMPORARY: these still use my_connector directly until you add/migrate API endpoints for them
         auth_tbl.update_last_login(user_id)
 
         # 🚫 BLOCK DEACTIVATED ACCOUNTS
@@ -351,7 +354,7 @@ class loginScreen(MDScreen):
 
         app.current_user_id = user_id
         app.current_user_name = fullname
-#stay
+
         app.store.put(
             "user",
             id=user_id,
@@ -2762,7 +2765,7 @@ class CalorieCounterScreen(MDScreen):
         # Extract calorie number
         try:
             calories = float(calorie_text.replace("kcal", "").strip())
-        except:
+        except Exception:
             self.show_msg("Invalid calorie format.")
             return
 
@@ -2773,18 +2776,18 @@ class CalorieCounterScreen(MDScreen):
 
         try:
             current_left = float(current_left_text)
-        except:
+        except Exception:
             current_left = 0
 
-        # NEW FEATURE: PREVENT SAVING IF NOT ENOUGH CALORIES
+        # PREVENT SAVING IF NOT ENOUGH CALORIES
         if calories > current_left:
             self.show_msg(
                 f"Not enough calories left! ({current_left} left, {calories} kcal food)"
             )
-            return  # ❌ STOP – DO NOT SAVE FOOD
+            return
 
-        # If calories are valid AND user has enough calories, save food
-        food_id = auth_tbl.insert_food(
+        # ✅ FastAPI food save instead of direct auth_tbl.insert_food()
+        result = api_client.create_food(
             user_id=self.user_id,
             food_name=food_name,
             quantity=quantity,
@@ -2792,8 +2795,13 @@ class CalorieCounterScreen(MDScreen):
             calories=calories
         )
 
+        if not result.get("success"):
+            self.show_msg(result.get("message", "Error saving food through API!"))
+            return
+
+        food_id = result.get("FoodId")
         if not food_id:
-            self.show_msg("Error saving food to database!")
+            self.show_msg("Food saved failed: API did not return FoodId.")
             return
 
         # UPDATE REMAINING CALORIES
@@ -2914,7 +2922,14 @@ class FoodLogScreen(MDScreen):
         date_str = self.selected_date.strftime("%Y-%m-%d")
         is_today = (date_str == datetime.now().strftime("%Y-%m-%d"))
 
-        entries = auth_tbl.get_user_food_entries_by_date(self.user_id, date_str)
+        # ✅ FastAPI food log loading instead of direct auth_tbl.get_user_food_entries_by_date()
+        result = api_client.get_foods_by_date(
+            user_id=self.user_id,
+            log_date=date_str
+        )
+
+        entries = result.get("foods", []) if isinstance(result, dict) else []
+
         container = self.ids.fl_container
         container.clear_widgets()
 
@@ -2932,7 +2947,15 @@ class FoodLogScreen(MDScreen):
             return
 
         for row in entries:
-            time_eaten = row["Created_at"].strftime("%I:%M %p")
+            created_at = row.get("Created_at")
+
+            if hasattr(created_at, "strftime"):
+                time_eaten = created_at.strftime("%I:%M %p")
+            else:
+                try:
+                    time_eaten = datetime.fromisoformat(str(created_at).replace("Z", "")).strftime("%I:%M %p")
+                except Exception:
+                    time_eaten = ""
 
             # 🔹 LEFT ICON (food)
             icon = MDIconButton(
@@ -2952,7 +2975,7 @@ class FoodLogScreen(MDScreen):
             )
 
             title = MDLabel(
-                text=f"{row['FoodName']} • {row['Calories']} kcal",
+                text=f"{row.get('FoodName', '')} • {row.get('Calories', 0)} kcal",
                 bold=True,
                 theme_text_color="Primary",
                 shorten=True,
@@ -2960,7 +2983,7 @@ class FoodLogScreen(MDScreen):
             )
 
             subtitle = MDLabel(
-                text=f"Qty: {row['FoodQuantity']} | Meal: {row['MealCategory']}",
+                text=f"Qty: {row.get('FoodQuantity', '')} | Meal: {row.get('MealCategory', '')}",
                 theme_text_color="Secondary",
                 font_size="12sp",
                 shorten=True,
@@ -6225,6 +6248,97 @@ class AIFitnessBuddyScreen(MDScreen):
         self.search_counter = None
         self.is_searching = False
 
+        self.typing_bubble = None
+        self.typing_event = None
+        self.typing_dot_index = 0
+
+    def fade_in_widget(self, widget, duration=0.40):
+        widget.opacity = 0
+        Animation(opacity=1, d=duration, t="out_quad").start(widget)
+
+    def recalculate_chat_height(self, *args):
+        if "chat_container" not in self.ids:
+            return
+
+        self.ids.chat_container.height = sum(
+            w.height + self.ids.chat_container.spacing
+            for w in self.ids.chat_container.children
+        )
+
+        self.scroll_to_bottom()
+
+    def add_typing_bubble(self):
+        """
+        Show AI thinking bubble with animated three dots.
+        This is not saved in database.
+        """
+        if self.is_searching:
+            return
+
+        self.remove_typing_bubble()
+
+        bubble = AIBubble(
+            message_text="[b].[/b]",
+            message_id=0,
+            original_text="[b].[/b]",
+            is_typing=True
+        )
+
+        bubble.opacity = 0
+        self.typing_bubble = bubble
+        self.ids.chat_container.add_widget(bubble)
+
+        def update_height(dt):
+            if not self.typing_bubble:
+                return
+
+            bubble.height = bubble.ids.bubble_container.height + dp(10)
+            self.recalculate_chat_height()
+            self.fade_in_widget(bubble, duration=0.20)
+
+        Clock.schedule_once(update_height, 0)
+
+        self.typing_dot_index = 0
+        self.typing_event = Clock.schedule_interval(self.animate_typing_dots, 0.35)
+
+    def animate_typing_dots(self, dt):
+        if not self.typing_bubble:
+            return False
+
+        dots = ["[b].[/b]", "[b]..[/b]", "[b]...[/b]"]
+        self.typing_dot_index = (self.typing_dot_index + 1) % len(dots)
+        self.typing_bubble.message_text = dots[self.typing_dot_index]
+
+        return True
+
+    def remove_typing_bubble(self):
+        if self.typing_event:
+            self.typing_event.cancel()
+            self.typing_event = None
+
+        if self.typing_bubble:
+            parent = self.typing_bubble.parent
+
+            if parent:
+                parent.remove_widget(self.typing_bubble)
+
+            self.typing_bubble = None
+            Clock.schedule_once(self.recalculate_chat_height, 0)
+
+    def finish_ai_response(self, response, ai_message_id, chat_id):
+        """
+        Remove typing bubble, then show the real AI response with fade-in.
+        """
+        if self.current_chat_id != chat_id:
+            return
+
+        if self.is_searching:
+            self.remove_typing_bubble()
+            return
+
+        self.remove_typing_bubble()
+        self.add_ai_bubble(response, ai_message_id, animate=True)
+
     def highlight_text(self, text, query, active_range=None):
         if not query:
             return text
@@ -6842,9 +6956,9 @@ class AIFitnessBuddyScreen(MDScreen):
 
         for msg in messages:
             if msg["role"] == "user":
-                self.add_user_bubble(msg["content"], msg["message_id"])
+                self.add_user_bubble(msg["content"], msg["message_id"], animate=False)
             else:
-                self.add_ai_bubble(msg["content"], msg["message_id"])
+                self.add_ai_bubble(msg["content"], msg["message_id"], animate=False)
 
     # ADD THIS - SEND MESSAGE METHOD (you're missing this!)
     def send_message(self):
@@ -6897,33 +7011,57 @@ class AIFitnessBuddyScreen(MDScreen):
 
    # ADD THIS - SCROLL TO BOTTOM (you're missing this!)
 
-    def add_user_bubble(self, text, message_id=None):
-        bubble = UserBubble(message_text=text, message_id=message_id or 0)
-        self.ids.chat_container.add_widget(bubble)
+    def add_user_bubble(self, text, message_id=None, animate=True):
+        bubble = UserBubble(
+            message_text=text,
+            message_id=message_id or 0,
+            original_text=text
+        )
 
-        # Update height after render
-        def update_height(dt):
-            bubble.height = bubble.ids.bubble_container.height + dp(10)
-            self.ids.chat_container.height = sum(
-                [w.height + self.ids.chat_container.spacing for w in self.ids.chat_container.children])
-            self.scroll_to_bottom()
-        Clock.schedule_once(update_height, 0)
+        if animate:
+            self.fade_in_widget(bubble)
 
-    def add_ai_bubble(self, text, message_id=None):
-        bubble = AIBubble(message_text=text, message_id=message_id or 0)
         self.ids.chat_container.add_widget(bubble)
 
         def update_height(dt):
             bubble.height = bubble.ids.bubble_container.height + dp(10)
-            self.ids.chat_container.height = sum(
-                [w.height + self.ids.chat_container.spacing for w in self.ids.chat_container.children])
-            self.scroll_to_bottom()
+            self.recalculate_chat_height()
+
+            if animate:
+                self.fade_in_widget(bubble)
+
         Clock.schedule_once(update_height, 0)
+
+        return bubble
+
+    def add_ai_bubble(self, text, message_id=None, animate=True):
+        bubble = AIBubble(
+            message_text=text,
+            message_id=message_id or 0,
+            original_text=text,
+            is_typing=False
+        )
+
+        if animate:
+            bubble.opacity = 0
+
+        self.ids.chat_container.add_widget(bubble)
+
+        def update_height(dt):
+            bubble.height = bubble.ids.bubble_container.height + dp(10)
+            self.recalculate_chat_height()
+
+            if animate:
+                self.fade_in_widget(bubble)
+
+        Clock.schedule_once(update_height, 0)
+
+        return bubble
 
     def get_ai_response(self, message):
         """
         Process AI response safely in a separate thread.
-        Handles DB thread-safety, AI errors, user login, and search mode.
+        Shows typing dots first, then fades in the AI response.
         """
         user_id = getattr(MDApp.get_running_app(), "current_user_id", None)
         if not user_id:
@@ -6938,9 +7076,17 @@ class AIFitnessBuddyScreen(MDScreen):
             print("❌ No current chat; cannot save AI response")
             return
 
+        chat_id = self.current_chat_id
+
+        # 🤖 Show AI thinking dots first
+        self.add_typing_bubble()
+
         def worker():
+            import time
+
+            start_time = time.time()
+
             try:
-                # Call AI logic once
                 response = process_message(message, user_id)
             except Exception as e:
                 response = "Oops! Something went wrong. Try again."
@@ -6949,18 +7095,25 @@ class AIFitnessBuddyScreen(MDScreen):
                 traceback.print_exc()
 
             try:
-                # Save AI response safely in DB
                 ai_message_id = auth_tbl.save_message_thread_safe(
-                    self.current_chat_id, "assistant", response)
+                    chat_id, "assistant", response
+                )
 
-                # Update UI on main thread
+                # Keep typing bubble visible for at least a short moment
+                elapsed = time.time() - start_time
+                delay = max(3.0 - elapsed, 0)
+
                 Clock.schedule_once(
-                    lambda dt: self.add_ai_bubble(response, ai_message_id))
+                    lambda dt: self.finish_ai_response(response, ai_message_id, chat_id),
+                    delay
+                )
 
             except Exception as e:
                 print(f"❌ AI response thread failed: {e}")
                 import traceback
                 traceback.print_exc()
+
+                Clock.schedule_once(lambda dt: self.remove_typing_bubble(), 0)
 
         Thread(target=worker, daemon=True).start()
 
@@ -7076,10 +7229,12 @@ class UserBubble(MDBoxLayout):
     message_id = NumericProperty(0)
     original_text = StringProperty("")
 
+
 class AIBubble(MDBoxLayout):
     message_text = StringProperty("")
     message_id = NumericProperty(0)
     original_text = StringProperty("")
+    is_typing = BooleanProperty(False)
 
 
 

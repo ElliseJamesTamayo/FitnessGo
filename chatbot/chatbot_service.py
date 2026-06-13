@@ -6,7 +6,11 @@ import re
 from typing import Optional
 import logging
 
-from chatbot.intent_detector import detect_intent
+from chatbot.intent_detector import (
+    detect_intent,
+    has_height_weight_context,
+    is_age_only_message
+)
 from chatbot.conversation_manager import conversation_manager
 from chatbot.data_extractors import (
     extract_height_weight, extract_activity_level,
@@ -360,12 +364,19 @@ def process_message(message: str, user_id: int) -> str:
                               "HELP", "ARTICLES", "READ_MORE_ARTICLE"]:
 
                 # Check for BMI data
-                data = extract_height_weight(message)
-                if data["height"] or data["weight"]:
-                    intent = "BMI"
+                message_lower = message.lower().strip()
+
+                if (
+                        not is_age_only_message(message_lower)
+                        and has_height_weight_context(message_lower)
+                ):
+                    data = extract_height_weight(message_lower)
+
+                    if data.get("height") or data.get("weight"):
+                        intent = "BMI"
 
                 # Check for activity level (calories flow)
-                elif extract_activity_level(message):
+                elif extract_activity_level(message_lower):
                     intent = "CALORIES"
 
                 # Enhanced workout detection: ONLY trigger if message explicitly mentions workout

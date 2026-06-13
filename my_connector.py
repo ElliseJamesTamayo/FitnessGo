@@ -135,18 +135,45 @@ class AuthTbl:
             WHERE Username = %s
             LIMIT 1
         """
-        self.cursor.execute(sql, (username,))
-        row = self.cursor.fetchone()
 
-        if not row:
+        try:
+            self.cursor.execute(sql, (username,))
+            row = self.cursor.fetchone()
+
+            if not row:
+                return None
+
+            stored_password = row["Password"]
+
+            if not stored_password:
+                return None
+
+            # bcrypt hashed password
+            if stored_password.startswith("$2b$") or stored_password.startswith("$2a$"):
+                if verify_password(password, stored_password):
+                    return row["UserId"]
+
+            # temporary support for old plain-text passwords
+            if password == stored_password:
+                hashed = hash_password(password)
+
+                self.cursor.execute(
+                    """
+                    UPDATE data_db
+                    SET Password = %s, Updated_at = NOW()
+                    WHERE UserId = %s
+                    """,
+                    (hashed, row["UserId"])
+                )
+
+                self.db.commit()
+                return row["UserId"]
+
             return None
 
-        stored_hash = row["Password"]
-
-        if verify_password(password, stored_hash):
-            return row["UserId"]
-
-        return None
+        except Exception as e:
+            print("CHECK PASSWORD ERROR:", e)
+            return None
 
     def load_health_conditions(self):
         path = os.path.join(os.path.dirname(__file__), "health_conditions.json")
@@ -192,9 +219,9 @@ class AuthTbl:
     def __init__(self):
         try:
             self.db = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                passwd="BTA5EYVWLfWcebF",
+                host="fitnessgo-db.clyuqe48evd0.ap-southeast-1.rds.amazonaws.com",
+                user="fitnessgo",
+                passwd="easygroup123456",
                 port=3306,
                 database="fitnessgo"
             )

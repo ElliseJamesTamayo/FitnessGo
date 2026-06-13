@@ -5346,6 +5346,8 @@ WindowManager:
             height: (self.texture_size[1] * self.width / self.texture_size[0]) if self.texture else 0
 
 
+
+
 <AIFitnessBuddyScreen>:
     name: "ai_fitness_buddy_screen"
     md_bg_color: (0.902, 0.902, 0.902, 1)
@@ -5567,6 +5569,8 @@ WindowManager:
 
 
 
+
+
 <UserBubble@MDBoxLayout>:
     message_text: ""
     message_id: 0
@@ -5613,23 +5617,38 @@ WindowManager:
             pos_hint: {"right": 1}
             theme_icon_color: "Custom"
             icon_color: 0.7, 0.7, 0.7, 1
-            on_release:on_release: app.root.get_screen("ai_fitness_buddy_screen").show_delete_message_dialog(root.message_id)
-
+            on_release: app.root.get_screen("ai_fitness_buddy_screen").show_delete_message_dialog(root.message_id)
 
 <AIBubble@MDBoxLayout>:
     message_text: ""
     message_id: 0
     orientation: "horizontal"
     size_hint_y: None
-    height: self.ids.bubble_container.height + dp(10)
+    height: max(self.ids.bubble_container.height, dp(34)) + dp(10)
     padding: [10, 5]
+    spacing: dp(8)
+
+    # ROBOT ICON HOLDER
+    MDBoxLayout:
+        size_hint_x: None
+        width: dp(34)
+        size_hint_y: None
+        height: root.height
+        padding: [0, dp(12), 0, 0]
+
+        MDIconButton:
+            icon: "robot"
+            size_hint: None, None
+            size: "34dp", "34dp"
+            theme_icon_color: "Custom"
+            icon_color: 0.17, 0.56, 0.20, 1
 
     MDBoxLayout:
         id: bubble_container
         orientation: "vertical"
         size_hint_x: None
         size_hint_y: None
-        width: min(dp(300), root.width * 0.78)
+        width: min(dp(300), root.width * 0.72)
         height: self.minimum_height
         spacing: dp(5)
 
@@ -5650,13 +5669,10 @@ WindowManager:
                 height: self.texture_size[1]
                 text_size: self.parent.width - dp(32), None
                 theme_text_color: "Custom"
-                text_color: 0.15, 0.15, 0.15, 1   # dark gray text
+                text_color: 0.15, 0.15, 0.15, 1
 
     Widget:
         size_hint_x: 0.15
-
-
-
 
 
 
