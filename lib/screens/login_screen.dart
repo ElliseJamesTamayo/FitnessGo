@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../data/api_service.dart';
+import '../data/api_session_store.dart';
 import '../data/local_auth_store.dart';
 import '../data/local_calorie_store.dart';
 import '../data/local_user_store.dart';
@@ -19,24 +21,20 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final emailController = TextEditingController();
+  final usernameController = TextEditingController();
   final passwordController = TextEditingController();
 
   bool isLoading = false;
 
   @override
   void dispose() {
-    emailController.dispose();
+    usernameController.dispose();
     passwordController.dispose();
     super.dispose();
   }
 
-  String nameFromEmail(String email) {
-    final localPart = email.trim().split('@').first;
-
-    if (localPart.isEmpty) return 'User';
-
-    final cleanedName = localPart.replaceAll(RegExp(r'[._-]+'), ' ').trim();
+  String nameFromUsername(String username) {
+    final cleanedName = username.trim().replaceAll(RegExp(r'[._-]+'), ' ');
 
     if (cleanedName.isEmpty) return 'User';
 
@@ -50,13 +48,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> login() async {
-    final email = emailController.text.trim();
+    final username = usernameController.text.trim();
     final password = passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter your email and password.'),
+          content: Text('Please enter your username and password.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -67,40 +65,97 @@ class _LoginScreenState extends State<LoginScreen> {
       isLoading = true;
     });
 
-    final isValidLogin = await LocalAuthStore.login(
-      email: email,
+    final loginResult = await ApiService.login(
+      username: username,
       password: password,
     );
 
     if (!mounted) return;
 
-    if (!isValidLogin) {
+    if (loginResult['success'] != true) {
       setState(() {
         isLoading = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid email or password.'),
+        SnackBar(
+          content: Text(
+            ApiService.asString(loginResult['message']).isEmpty
+                ? 'Invalid username or password.'
+                : ApiService.asString(loginResult['message']),
+          ),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    final savedName = await LocalAuthStore.getFullName();
-    final savedGoal = await LocalAuthStore.getDailyGoal();
+    final userId = ApiService.asInt(loginResult['UserId']);
+
+    if (userId <= 0) {
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Login succeeded, but UserId was missing.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    await ApiSessionStore.saveUserId(userId);
+
+    final profile = await ApiService.getProfile(userId);
 
     if (!mounted) return;
 
-    if (savedName.trim().isNotEmpty && savedName != 'User') {
-      LocalUserStore.setFullName(savedName);
-    } else {
-      LocalUserStore.setFullName(nameFromEmail(email));
+    if (profile['UserId'] == null) {
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Login succeeded, but profile could not be loaded.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
 
-    if (savedGoal > 0) {
-      LocalCalorieStore.setDailyGoal(savedGoal);
+    final fullName = ApiService.asString(profile['Fullname']);
+    final email = ApiService.asString(profile['Email']);
+    final dailyGoal = ApiService.asInt(profile['DailyNetGoal']);
+
+    await LocalAuthStore.saveSignup(
+      fullName: fullName.isEmpty ? nameFromUsername(username) : fullName,
+      email: email.isEmpty ? username : email,
+      password: password,
+      dailyGoal: dailyGoal,
+      goal: ApiService.asString(profile['Goal']),
+      desiredWeight: ApiService.asDouble(profile['DesiredWeight']),
+      bmi: ApiService.asDouble(profile['BMI']),
+      bmiStatus: ApiService.asString(profile['BMIStatus']),
+      activityLevel: ApiService.asString(profile['ActivityLevel']),
+      healthCondition:
+          ApiService.asString(profile['WhatHealthConditions']).isEmpty
+              ? ApiService.asString(profile['HasHealthConditions'])
+              : ApiService.asString(profile['WhatHealthConditions']),
+      age: ApiService.asInt(profile['Age']),
+      gender: ApiService.asString(profile['Gender']),
+      height: ApiService.asDouble(profile['Height']),
+      weight: ApiService.asDouble(profile['Weight']),
+    );
+
+    LocalUserStore.setFullName(
+      fullName.isEmpty ? nameFromUsername(username) : fullName,
+    );
+
+    if (dailyGoal > 0) {
+      LocalCalorieStore.setDailyGoal(dailyGoal);
     } else if (LocalCalorieStore.dailyGoal == 0) {
       LocalCalorieStore.setDailyGoal(2000);
     }
@@ -183,12 +238,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: Column(
                     children: [
-                      fieldLabel('Email'),
+                      fieldLabel('Username'),
                       AppTextField(
-                        controller: emailController,
-                        label: 'Enter your email',
-                        icon: Icons.email,
-                        keyboardType: TextInputType.emailAddress,
+                        controller: usernameController,
+                        label: 'Enter your username',
+                        icon: Icons.person,
                       ),
                       const SizedBox(height: 16),
                       fieldLabel('Password'),
@@ -263,4 +317,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
