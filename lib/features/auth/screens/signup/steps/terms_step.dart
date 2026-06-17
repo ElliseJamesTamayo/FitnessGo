@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
-import '../../../models/signup_data.dart';
-import '../../../widgets/app_button.dart';
-import '../../../widgets/app_logo.dart';
+import '../../../../../models/signup_data.dart';
+import '../../../../../widgets/app_button.dart';
+import '../../../../../widgets/app_logo.dart';
 
 class TermsStep extends StatefulWidget {
   final SignupData data;
@@ -120,3 +120,6 @@ class _TermsStepState extends State<TermsStep> {
     );
   }
 }
+
+
+

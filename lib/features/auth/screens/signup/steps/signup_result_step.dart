@@ -1,10 +1,12 @@
 ﻿import 'package:flutter/material.dart';
 
-import '../../../data/local_auth_store.dart';
-import '../../../data/local_calorie_store.dart';
-import '../../../data/local_user_store.dart';
-import '../../../models/signup_data.dart';
-import '../../../widgets/app_button.dart';
+import '../../../../../data/local_auth_store.dart';
+import '../../../../../core/storage/api_session_store.dart';
+import '../../../../../data/local_calorie_store.dart';
+import '../../../../../data/local_user_store.dart';
+import '../../../../../models/signup_data.dart';
+import '../../../../../widgets/app_button.dart';
+import '../../../data/auth_api.dart';
 
 class SignupResultStep extends StatelessWidget {
   final SignupData data;
@@ -219,8 +221,66 @@ class SignupResultStep extends StatelessWidget {
                     Expanded(
                       child: AppButton(
                         text: 'Dashboard',
-                        onPressed: () {
-                          LocalAuthStore.saveSignup(
+                        onPressed: () async {
+                          final selectedConditions = <String>[
+                            ...data.healthConditions,
+                          ];
+
+                          if (data.otherHealthCondition.trim().isNotEmpty) {
+                            selectedConditions.add(
+                              data.otherHealthCondition.trim(),
+                            );
+                          }
+
+                          final healthConditionText =
+                              data.hasHealthCondition == 'Yes' &&
+                                      selectedConditions.isNotEmpty
+                                  ? selectedConditions.join(', ')
+                                  : 'None';
+
+                          final registerResult = await AuthApi.register(
+                            username: data.username,
+                            email: data.email,
+                            password: data.password,
+                            fullname: data.fullName,
+                            age: data.age ?? 0,
+                            gender: data.gender,
+                            height: data.height ?? 0,
+                            weight: data.weight ?? 0,
+                            goal: data.goal,
+                            activityLevel: data.activityLevel,
+                            desiredWeight: data.desiredWeight,
+                            hasHealthConditions:
+                                data.hasHealthCondition.isEmpty
+                                    ? 'No'
+                                    : data.hasHealthCondition,
+                            whatHealthConditions: healthConditionText,
+                          );
+
+                          if (registerResult['success'] != true) {
+                            if (!context.mounted) return;
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  registerResult['message']?.toString() ??
+                                      'Signup failed. Please try again.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          final userId = int.tryParse(
+                                '${registerResult['UserId'] ?? registerResult['userId'] ?? 0}',
+                              ) ??
+                              0;
+
+                          if (userId > 0) {
+                            await ApiSessionStore.saveUserId(userId);
+                          }
+
+                          await LocalAuthStore.saveSignup(
                             fullName: data.fullName,
                             email: data.email,
                             password: data.password,
@@ -230,19 +290,19 @@ class SignupResultStep extends StatelessWidget {
                             bmi: data.bmi,
                             bmiStatus: data.bmiStatus,
                             activityLevel: data.activityLevel,
-                            healthCondition: data.hasHealthCondition == 'Yes'
-                                ? data.healthConditions.join(', ')
-                                : 'None',
-                    age: data.age ?? 0,
-                    gender: data.gender,
-                    height: data.height ?? 0,
-                    weight: data.weight ?? 0,
-                          ).then((_) {
-                            LocalUserStore.setFullName(data.fullName);
-                            LocalCalorieStore.setDailyGoal(data.dailyCalorieGoal);
-                            LocalCalorieStore.clear();
-                            onFinish();
-                          });
+                            healthCondition: healthConditionText,
+                            age: data.age ?? 0,
+                            gender: data.gender,
+                            height: data.height ?? 0,
+                            weight: data.weight ?? 0,
+                          );
+
+                          LocalUserStore.setFullName(data.fullName);
+                          LocalCalorieStore.setDailyGoal(data.dailyCalorieGoal);
+                          LocalCalorieStore.clear();
+
+                          if (!context.mounted) return;
+                          onFinish();
                         },
                       ),
                     ),
@@ -256,6 +316,10 @@ class SignupResultStep extends StatelessWidget {
     );
   }
 }
+
+
+
+
 
 
 

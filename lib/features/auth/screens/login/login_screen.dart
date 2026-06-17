@@ -1,16 +1,16 @@
 ﻿import 'package:flutter/material.dart';
 
-import '../data/api_service.dart';
-import '../data/api_session_store.dart';
-import '../data/local_auth_store.dart';
-import '../data/local_calorie_store.dart';
-import '../data/local_user_store.dart';
-import '../widgets/app_button.dart';
-import '../widgets/app_logo.dart';
-import '../widgets/app_text_field.dart';
-import 'dashboard_screen.dart';
-import 'signup/signup_flow_screen.dart';
-
+import '../../../../core/network/api_client.dart';
+import '../../../../core/storage/api_session_store.dart';
+import '../../../../data/local_auth_store.dart';
+import '../../../../data/local_calorie_store.dart';
+import '../../../../data/local_user_store.dart';
+import '../../../../screens/dashboard_screen.dart';
+import '../../../../widgets/app_button.dart';
+import '../../../../widgets/app_logo.dart';
+import '../../../../widgets/app_text_field.dart';
+import '../../data/auth_api.dart';
+import '../signup/signup_flow_screen.dart';
 class LoginScreen extends StatefulWidget {
   static const routeName = '/login';
 
@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
       isLoading = true;
     });
 
-    final loginResult = await ApiService.login(
+    final loginResult = await AuthApi.login(
       username: username,
       password: password,
     );
@@ -80,9 +80,9 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            ApiService.asString(loginResult['message']).isEmpty
+            ApiClient.asString(loginResult['message']).isEmpty
                 ? 'Invalid username or password.'
-                : ApiService.asString(loginResult['message']),
+                : ApiClient.asString(loginResult['message']),
           ),
           backgroundColor: Colors.red,
         ),
@@ -90,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final userId = ApiService.asInt(loginResult['UserId']);
+    final userId = ApiClient.asInt(loginResult['UserId']);
 
     if (userId <= 0) {
       setState(() {
@@ -108,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     await ApiSessionStore.saveUserId(userId);
 
-    final profile = await ApiService.getProfile(userId);
+    final profile = await AuthApi.getProfile(userId);
 
     if (!mounted) return;
 
@@ -126,28 +126,28 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final fullName = ApiService.asString(profile['Fullname']);
-    final email = ApiService.asString(profile['Email']);
-    final dailyGoal = ApiService.asInt(profile['DailyNetGoal']);
+    final fullName = ApiClient.asString(profile['Fullname']);
+    final email = ApiClient.asString(profile['Email']);
+    final dailyGoal = ApiClient.asInt(profile['DailyNetGoal']);
 
     await LocalAuthStore.saveSignup(
       fullName: fullName.isEmpty ? nameFromUsername(username) : fullName,
       email: email.isEmpty ? username : email,
       password: password,
       dailyGoal: dailyGoal,
-      goal: ApiService.asString(profile['Goal']),
-      desiredWeight: ApiService.asDouble(profile['DesiredWeight']),
-      bmi: ApiService.asDouble(profile['BMI']),
-      bmiStatus: ApiService.asString(profile['BMIStatus']),
-      activityLevel: ApiService.asString(profile['ActivityLevel']),
+      goal: ApiClient.asString(profile['Goal']),
+      desiredWeight: ApiClient.asDouble(profile['DesiredWeight']),
+      bmi: ApiClient.asDouble(profile['BMI']),
+      bmiStatus: ApiClient.asString(profile['BMIStatus']),
+      activityLevel: ApiClient.asString(profile['ActivityLevel']),
       healthCondition:
-          ApiService.asString(profile['WhatHealthConditions']).isEmpty
-              ? ApiService.asString(profile['HasHealthConditions'])
-              : ApiService.asString(profile['WhatHealthConditions']),
-      age: ApiService.asInt(profile['Age']),
-      gender: ApiService.asString(profile['Gender']),
-      height: ApiService.asDouble(profile['Height']),
-      weight: ApiService.asDouble(profile['Weight']),
+          ApiClient.asString(profile['WhatHealthConditions']).isEmpty
+              ? ApiClient.asString(profile['HasHealthConditions'])
+              : ApiClient.asString(profile['WhatHealthConditions']),
+      age: ApiClient.asInt(profile['Age']),
+      gender: ApiClient.asString(profile['Gender']),
+      height: ApiClient.asDouble(profile['Height']),
+      weight: ApiClient.asDouble(profile['Weight']),
     );
 
     LocalUserStore.setFullName(
@@ -317,3 +317,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
+
+
+
+

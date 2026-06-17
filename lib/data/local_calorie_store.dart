@@ -1,4 +1,4 @@
-class LocalCalorieStore {
+﻿class LocalCalorieStore {
   static int dailyGoal = 0;
   static int _totalIntake = 0;
 
@@ -63,3 +63,5 @@ class LocalCalorieStore {
     _totalIntake = 0;
   }
 }
+
+

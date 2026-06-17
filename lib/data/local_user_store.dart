@@ -1,4 +1,4 @@
-class LocalUserStore {
+﻿class LocalUserStore {
   static String fullName = '';
 
   static void setFullName(String value) {
@@ -12,3 +12,5 @@ class LocalUserStore {
     return parts.first;
   }
 }
+
+

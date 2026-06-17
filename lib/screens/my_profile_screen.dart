@@ -3,7 +3,7 @@
 import '../data/local_auth_store.dart';
 import '../data/local_calorie_store.dart';
 import '../data/local_user_store.dart';
-import 'login_screen.dart';
+import '../features/auth/screens/login/login_screen.dart';
 import 'faqs_screen.dart';
 import 'weekly_progress_screen.dart';
 
@@ -1325,6 +1325,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     );
   }
 }
+
+
 
 
 

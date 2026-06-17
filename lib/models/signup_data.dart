@@ -1,4 +1,4 @@
-class SignupData {
+﻿class SignupData {
   bool acceptedTerms = false;
 
   String fullName = '';
@@ -71,3 +71,5 @@ class SignupData {
     return calories.round();
   }
 }
+
+

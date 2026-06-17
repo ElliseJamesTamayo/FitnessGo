@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../data/local_user_store.dart';
 import '../data/local_calorie_store.dart';
@@ -10,7 +10,7 @@ import 'fitness_buddy_screen.dart';
 import 'profile_screen.dart';
 import 'my_profile_screen.dart';
 import 'wellness_hub_screen.dart';
-import 'login_screen.dart';
+import '../features/auth/screens/login/login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   static const routeName = '/dashboard';
@@ -722,6 +722,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
+
+
 
 
 

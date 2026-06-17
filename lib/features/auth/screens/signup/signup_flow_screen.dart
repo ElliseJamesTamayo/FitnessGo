@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
-import '../../models/signup_data.dart';
-import '../dashboard_screen.dart';
+import '../../../../models/signup_data.dart';
+import '../../../../screens/dashboard_screen.dart';
 import 'steps/account_credentials_step.dart';
 import 'steps/activity_level_step.dart';
 import 'steps/goal_step.dart';
@@ -10,7 +10,7 @@ import 'steps/personal_info_step.dart';
 import 'steps/profile_photo_step.dart';
 import 'steps/signup_result_step.dart';
 import 'steps/terms_step.dart';
-import '../../data/user_session.dart';
+import '../../../../data/user_session.dart';
 
 class SignupFlowScreen extends StatefulWidget {
   static const routeName = '/signup';
@@ -120,3 +120,6 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     );
   }
 }
+
+
+

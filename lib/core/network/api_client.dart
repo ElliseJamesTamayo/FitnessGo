@@ -2,7 +2,7 @@
 
 import 'package:http/http.dart' as http;
 
-class ApiService {
+class ApiClient {
   static const String baseUrl = 'http://18.138.51.204:8000';
   static const Duration timeout = Duration(seconds: 10);
 
@@ -25,12 +25,27 @@ class ApiService {
     return value.toString();
   }
 
+  static Uri _uri(String endpoint, {Map<String, dynamic>? params}) {
+    final uri = Uri.parse('$baseUrl$endpoint');
+
+    if (params == null || params.isEmpty) {
+      return uri;
+    }
+
+    return uri.replace(
+      queryParameters: params.map(
+        (key, value) => MapEntry(key, value.toString()),
+      ),
+    );
+  }
+
   static Future<Map<String, dynamic>> request(
     String method,
     String endpoint, {
     Map<String, dynamic>? body,
+    Map<String, dynamic>? params,
   }) async {
-    final uri = Uri.parse('$baseUrl$endpoint');
+    final uri = _uri(endpoint, params: params);
 
     try {
       late http.Response response;
@@ -45,6 +60,16 @@ class ApiService {
               body: jsonEncode(body ?? {}),
             )
             .timeout(timeout);
+      } else if (method == 'PUT') {
+        response = await http
+            .put(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(body ?? {}),
+            )
+            .timeout(timeout);
+      } else if (method == 'DELETE') {
+        response = await http.delete(uri).timeout(timeout);
       } else {
         return {
           'success': false,
@@ -93,21 +118,30 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> login({
-    required String username,
-    required String password,
+  static Future<Map<String, dynamic>> get(
+    String endpoint, {
+    Map<String, dynamic>? params,
   }) {
-    return request(
-      'POST',
-      '/auth/login',
-      body: {
-        'username': username,
-        'password': password,
-      },
-    );
+    return request('GET', endpoint, params: params);
   }
 
-  static Future<Map<String, dynamic>> getProfile(int userId) {
-    return request('GET', '/profile/$userId');
+  static Future<Map<String, dynamic>> post(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) {
+    return request('POST', endpoint, body: body);
+  }
+
+  static Future<Map<String, dynamic>> put(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) {
+    return request('PUT', endpoint, body: body);
+  }
+
+  static Future<Map<String, dynamic>> delete(String endpoint) {
+    return request('DELETE', endpoint);
   }
 }
+
+

@@ -708,3 +708,5 @@ class _DayCalories {
     required this.calories,
   });
 }
+
+

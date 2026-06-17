@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import 'screens/welcome_screen.dart';
 import 'screens/role_screen.dart';
-import 'screens/login_screen.dart';
+import 'features/auth/screens/login/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/calorie_counter_screen.dart';
 import 'screens/fitness_buddy_screen.dart';
@@ -11,7 +11,7 @@ import 'screens/wellness_hub_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/my_profile_screen.dart';
 import 'screens/create_post_screen.dart';
-import 'screens/signup/signup_flow_screen.dart';
+import 'features/auth/screens/signup/signup_flow_screen.dart';
 
 void main() {
   runApp(const FitnessGoApp());
@@ -69,6 +69,8 @@ class NoStretchScrollBehavior extends MaterialScrollBehavior {
     return const ClampingScrollPhysics();
   }
 }
+
+
 
 
 

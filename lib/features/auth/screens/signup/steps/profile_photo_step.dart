@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
-import '../../../widgets/app_button.dart';
-import '../../../widgets/app_logo.dart';
+import '../../../../../widgets/app_button.dart';
+import '../../../../../widgets/app_logo.dart';
 
 class ProfilePhotoStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -261,4 +261,7 @@ class _ProfilePhotoStepState extends State<ProfilePhotoStep> {
     );
   }
 }
+
+
+
 

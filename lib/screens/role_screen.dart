@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../widgets/app_button.dart';
 import '../widgets/app_logo.dart';
-import 'login_screen.dart';
+import '../features/auth/screens/login/login_screen.dart';
 
 class RoleScreen extends StatefulWidget {
   static const routeName = '/role';
@@ -190,3 +190,5 @@ class _RoleScreenState extends State<RoleScreen> {
     );
   }
 }
+
+
