@@ -1,0 +1,188 @@
+﻿import 'package:shared_preferences/shared_preferences.dart';
+
+class LocalAuthStore {
+  static const _fullNameKey = 'signup_full_name';
+  static const _emailKey = 'signup_email';
+  static const _passwordKey = 'signup_password';
+  static const _dailyGoalKey = 'signup_daily_goal';
+
+  static const _goalKey = 'signup_goal';
+  static const _desiredWeightKey = 'signup_desired_weight';
+  static const _bmiKey = 'signup_bmi';
+  static const _bmiStatusKey = 'signup_bmi_status';
+  static const _activityLevelKey = 'signup_activity_level';
+  static const _healthConditionKey = 'signup_health_condition';
+
+  static const _ageKey = 'signup_age';
+  static const _genderKey = 'signup_gender';
+  static const _heightKey = 'signup_height';
+  static const _weightKey = 'signup_weight';
+
+  static Future<void> saveSignup({
+    required String fullName,
+    required String email,
+    required String password,
+    required int dailyGoal,
+    String goal = '',
+    double desiredWeight = 0,
+    double bmi = 0,
+    String bmiStatus = '',
+    String activityLevel = '',
+    String healthCondition = '',
+    int age = 0,
+    String gender = '',
+    double height = 0,
+    double weight = 0,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(_fullNameKey, fullName.trim());
+    await prefs.setString(_emailKey, email.trim().toLowerCase());
+    await prefs.setString(_passwordKey, password.trim());
+    await prefs.setInt(_dailyGoalKey, dailyGoal);
+
+    await prefs.setString(_goalKey, goal.trim());
+    await prefs.setDouble(_desiredWeightKey, desiredWeight);
+    await prefs.setDouble(_bmiKey, bmi);
+    await prefs.setString(_bmiStatusKey, bmiStatus.trim());
+    await prefs.setString(_activityLevelKey, activityLevel.trim());
+    await prefs.setString(_healthConditionKey, healthCondition.trim());
+
+    await prefs.setInt(_ageKey, age);
+    await prefs.setString(_genderKey, gender.trim());
+    await prefs.setDouble(_heightKey, height.toDouble());
+    await prefs.setDouble(_weightKey, weight.toDouble());
+  }
+
+  static Future<bool> login({
+    required String email,
+    required String password,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final savedEmail = prefs.getString(_emailKey) ?? '';
+    final savedPassword = prefs.getString(_passwordKey) ?? '';
+
+    return savedEmail.trim().toLowerCase() == email.trim().toLowerCase() &&
+        savedPassword.trim() == password.trim();
+  }
+
+  static Future<void> updateProfile({
+    required String fullName,
+    required String email,
+    required String activityLevel,
+    required String healthCondition,
+    int? age,
+    String? gender,
+    double? height,
+    double? weight,
+    double? bmi,
+    String? bmiStatus,
+    int? dailyGoal,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(_fullNameKey, fullName.trim());
+    await prefs.setString(_emailKey, email.trim().toLowerCase());
+    await prefs.setString(_activityLevelKey, activityLevel.trim());
+    await prefs.setString(_healthConditionKey, healthCondition.trim());
+
+    if (age != null) await prefs.setInt(_ageKey, age);
+    if (gender != null) await prefs.setString(_genderKey, gender.trim());
+    if (height != null) await prefs.setDouble(_heightKey, height);
+    if (weight != null) await prefs.setDouble(_weightKey, weight);
+    if (bmi != null) await prefs.setDouble(_bmiKey, bmi);
+    if (bmiStatus != null) await prefs.setString(_bmiStatusKey, bmiStatus.trim());
+    if (dailyGoal != null) await prefs.setInt(_dailyGoalKey, dailyGoal);
+  }
+
+  static Future<void> updateFitnessGoals({
+    required String goal,
+    required double desiredWeight,
+    required int dailyGoal,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(_goalKey, goal.trim());
+    await prefs.setDouble(_desiredWeightKey, desiredWeight);
+    await prefs.setInt(_dailyGoalKey, dailyGoal);
+  }
+
+  static Future<String> getFullName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_fullNameKey) ?? 'User';
+  }
+
+  static Future<String> getEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_emailKey) ?? '';
+  }
+
+  static Future<int> getDailyGoal() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_dailyGoalKey) ?? 0;
+  }
+
+  static Future<String> getGoal() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_goalKey) ?? '';
+  }
+
+  static Future<double> getDesiredWeight() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_desiredWeightKey) ?? 0;
+  }
+
+  static Future<double> getBmi() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_bmiKey) ?? 0;
+  }
+
+  static Future<String> getBmiStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_bmiStatusKey) ?? '';
+  }
+
+  static Future<String> getActivityLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_activityLevelKey) ?? '';
+  }
+
+  static Future<String> getHealthCondition() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_healthConditionKey) ?? '';
+  }
+
+  static Future<int> getAge() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_ageKey) ?? 0;
+  }
+
+  static Future<String> getGender() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_genderKey) ?? '';
+  }
+
+  static Future<double> getHeight() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.get(_heightKey);
+
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
+
+    return 0;
+  }
+
+  static Future<double> getWeight() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.get(_weightKey);
+
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
+
+    return 0;
+  }
+}
+

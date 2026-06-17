@@ -1,0 +1,244 @@
+import 'package:flutter/material.dart';
+
+import '../data/local_auth_store.dart';
+import '../data/local_calorie_store.dart';
+import '../data/local_user_store.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_logo.dart';
+import '../widgets/app_text_field.dart';
+import 'dashboard_screen.dart';
+import 'signup/signup_flow_screen.dart';
+
+class LoginScreen extends StatefulWidget {
+  static const routeName = '/login';
+
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  bool isLoading = false;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  String nameFromEmail(String email) {
+    final localPart = email.trim().split('@').first;
+
+    if (localPart.isEmpty) return 'User';
+
+    final cleanedName = localPart.replaceAll(RegExp(r'[._-]+'), ' ').trim();
+
+    if (cleanedName.isEmpty) return 'User';
+
+    return cleanedName
+        .split(RegExp(r'\s+'))
+        .map((word) {
+          if (word.isEmpty) return '';
+          return word[0].toUpperCase() + word.substring(1).toLowerCase();
+        })
+        .join(' ');
+  }
+
+  Future<void> login() async {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email and password.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    final savedName = await LocalAuthStore.getFullName();
+    final savedGoal = await LocalAuthStore.getDailyGoal();
+
+    if (!mounted) return;
+
+    if (savedName.trim().isNotEmpty && savedName != 'User') {
+      LocalUserStore.setFullName(savedName);
+    } else {
+      LocalUserStore.setFullName(nameFromEmail(email));
+    }
+
+    if (savedGoal > 0) {
+      LocalCalorieStore.setDailyGoal(savedGoal);
+    } else if (LocalCalorieStore.dailyGoal == 0) {
+      LocalCalorieStore.setDailyGoal(2000);
+    }
+
+    LocalCalorieStore.clear();
+
+    setState(() {
+      isLoading = false;
+    });
+
+    Navigator.pushReplacementNamed(
+      context,
+      DashboardScreen.routeName,
+    );
+  }
+
+  Widget fieldLabel(String text) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 7),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFE6E6E6),
+      body: GestureDetector(
+        onTap: () {
+          FocusScope.of(context).unfocus();
+        },
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            child: Column(
+              children: [
+                const AppLogo(size: 110),
+                const SizedBox(height: 12),
+                const Text(
+                  'Welcome Back',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Log in to continue your fitness journey.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 30),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      fieldLabel('Email'),
+                      AppTextField(
+                        controller: emailController,
+                        label: 'Enter your email',
+                        icon: Icons.email,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 16),
+                      fieldLabel('Password'),
+                      AppTextField(
+                        controller: passwordController,
+                        label: 'Enter your password',
+                        icon: Icons.lock,
+                        isPassword: true,
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {},
+                          child: const Text(
+                            'Forgot Password?',
+                            style: TextStyle(
+                              color: Color(0xFF008000),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: AppButton(
+                          text: isLoading ? 'Logging in...' : 'Login',
+                          onPressed: () {
+                            if (!isLoading) {
+                              login();
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'No account yet?',
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pushNamed(
+                                context,
+                                SignupFlowScreen.routeName,
+                              );
+                            },
+                            child: const Text(
+                              'Create Account',
+                              style: TextStyle(
+                                color: Color(0xFF008000),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
