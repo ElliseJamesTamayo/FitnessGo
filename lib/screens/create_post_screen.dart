@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../widgets/profile_photo_avatar.dart';
 class CreatePostScreen extends StatefulWidget {
   static const routeName = '/create-post';
 
@@ -161,15 +162,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Widget buildUserRow() {
     return Row(
       children: [
-        const CircleAvatar(
-          radius: 27,
-          backgroundColor: Color(0xFFE8F5E9),
-          child: Icon(
-            Icons.person_rounded,
-            color: Color(0xFF008000),
-            size: 35,
-          ),
-        ),
+        const ProfilePhotoAvatar(radius: 27, iconSize: 35),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

@@ -1,7 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 
-import '../data/filipino_food_database.dart';
+import '../core/storage/api_session_store.dart';
 import '../data/local_calorie_store.dart';
+import '../features/caloriecounter/caloriecount.dart';
 import 'dashboard_screen.dart';
 
 class CalorieCounterScreen extends StatefulWidget {
@@ -19,7 +20,19 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
 
   String selectedMeal = 'Breakfast';
   int calculatedCalories = 0;
-  FoodItem? selectedFood;
+
+  bool isLoadingLog = false;
+  bool isCalculating = false;
+  bool isSaving = false;
+
+  int calorieIntake = 0;
+  List<dynamic> foodLogs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadFoodLogFromBackend();
+  }
 
   @override
   void dispose() {
@@ -28,40 +41,317 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
     super.dispose();
   }
 
-  void recalculateCalories() {
-    final foodName = foodController.text.trim();
-    final quantity = double.tryParse(quantityController.text.trim()) ?? 0;
-    final food = FilipinoFoodDatabase.findByName(foodName);
+  String todayDate() {
+    return DateTime.now().toIso8601String().split('T').first;
+  }
 
+  int get calorieRemaining {
+    return LocalCalorieStore.dailyGoal - calorieIntake;
+  }
+
+  int getIntValue(dynamic value) {
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is String) {
+      return int.tryParse(value) ?? double.tryParse(value)?.round() ?? 0;
+    }
+    return 0;
+  }
+
+  double getDoubleValue(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  String getStringValue(dynamic value) {
+    if (value == null) return '';
+    return value.toString();
+  }
+
+  String get foodName {
+    return foodController.text.trim();
+  }
+
+  double get foodQuantity {
+    return double.tryParse(quantityController.text.trim()) ?? 0;
+  }
+
+  List<dynamic> extractFoodList(Map<String, dynamic> result) {
+    final possibleLists = [
+      result['foods'],
+      result['food'],
+      result['entries'],
+      result['items'],
+      result['results'],
+      result['data'],
+    ];
+
+    for (final item in possibleLists) {
+      if (item is List) return item;
+
+      if (item is Map) {
+        final nestedLists = [
+          item['foods'],
+          item['food'],
+          item['entries'],
+          item['items'],
+          item['results'],
+          item['data'],
+        ];
+
+        for (final nestedItem in nestedLists) {
+          if (nestedItem is List) return nestedItem;
+        }
+      }
+    }
+
+    return [];
+  }
+
+  int calculateTotalCaloriesFromLogs(List<dynamic> logs) {
+    int total = 0;
+
+    for (final entry in logs) {
+      if (entry is Map) {
+        total += getIntValue(entry['Calories'] ?? entry['calories']);
+      }
+    }
+
+    return total;
+  }
+
+  void syncLocalCalorieStoreForDashboard(List<dynamic> logs) {
+    // This is only a cache for dashboard compatibility.
+    // The calories are loaded from backend food logs, not from a local food database.
+    LocalCalorieStore.clear();
+
+    for (final entry in logs) {
+      if (entry is! Map) continue;
+
+      final savedFoodName = getStringValue(
+        entry['FoodName'] ??
+            entry['foodName'] ??
+            entry['food_name'] ??
+            entry['food'],
+      );
+
+      final meal = getStringValue(
+        entry['MealCategory'] ??
+            entry['mealCategory'] ??
+            entry['meal_category'],
+      );
+
+      final calories = getIntValue(entry['Calories'] ?? entry['calories']);
+
+      if (savedFoodName.isEmpty || calories <= 0) continue;
+
+      LocalCalorieStore.addEntry(
+        food: meal.isEmpty ? savedFoodName : '$savedFoodName • $meal',
+        calories: calories,
+      );
+    }
+  }
+
+  Future<void> loadFoodLogFromBackend() async {
     setState(() {
-      selectedFood = food;
+      isLoadingLog = true;
+    });
 
-      if (food == null || quantity <= 0) {
-        calculatedCalories = 0;
+    try {
+      final userId = await ApiSessionStore.getUserId();
+
+      if (userId == null || userId <= 0) {
+        if (!mounted) return;
+
+        setState(() {
+          isLoadingLog = false;
+          calorieIntake = 0;
+          foodLogs = [];
+        });
         return;
       }
 
-      calculatedCalories =
-          ((food.calories / food.servingSizeG) * quantity).round();
-    });
+      final result = await CalorieCounterApi.getFoodsByUserAndDate(
+        userId: userId,
+        logDate: todayDate(),
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == false) {
+        final message = CalorieCounterApi.asString(
+          result['message'],
+        ).toLowerCase();
+
+        final statusCode = CalorieCounterApi.asInt(
+          result['statusCode'] ?? result['status_code'],
+        );
+
+        setState(() {
+          isLoadingLog = false;
+          calorieIntake = 0;
+          foodLogs = [];
+        });
+
+        // No food saved today should not show red "Not Found".
+        if (statusCode == 404 || message.contains('not found')) {
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              message.isEmpty ? 'Failed to load food log.' : message,
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final logs = extractFoodList(result);
+      final total = calculateTotalCaloriesFromLogs(logs);
+
+      syncLocalCalorieStoreForDashboard(logs);
+
+      setState(() {
+        foodLogs = logs;
+        calorieIntake = total;
+        isLoadingLog = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingLog = false;
+        calorieIntake = 0;
+        foodLogs = [];
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading food log: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
-  void getCalories() {
-    final foodName = foodController.text.trim();
-    final quantity = double.tryParse(quantityController.text.trim()) ?? 0;
 
-    final food = FilipinoFoodDatabase.findByName(foodName);
-
-    if (food == null) {
+  Future<int> getCaloriesFromBackend({
+    bool showSuccessMessage = true,
+  }) async {
+    if (foodName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Food not found. Choose a food from the suggestions.'),
+          content: Text('Enter a food name first.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return 0;
+    }
+
+    if (foodQuantity <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a valid food quantity in grams.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return 0;
+    }
+
+    setState(() {
+      isCalculating = true;
+    });
+
+    try {
+      final result = await CalorieCounterApi.calculateCalories(
+        foodName: foodName,
+        foodQuantity: foodQuantity,
+      );
+
+      if (!mounted) return 0;
+
+      if (result['success'] == false) {
+        setState(() {
+          isCalculating = false;
+          calculatedCalories = 0;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              CalorieCounterApi.asString(result['message']).isEmpty
+                  ? 'Failed to calculate calories.'
+                  : CalorieCounterApi.asString(result['message']),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+        return 0;
+      }
+
+      final calories = CalorieCounterApi.extractCalories(result);
+
+      setState(() {
+        calculatedCalories = calories;
+        isCalculating = false;
+      });
+
+      if (calories <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No calories returned. Please check the food name.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return 0;
+      }
+
+      if (showSuccessMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Calories calculated from backend.'),
+            backgroundColor: Color(0xFF008000),
+          ),
+        );
+      }
+
+      return calories;
+    } catch (error) {
+      if (!mounted) return 0;
+
+      setState(() {
+        isCalculating = false;
+        calculatedCalories = 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error calculating calories: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      return 0;
+    }
+  }
+
+  Future<void> saveCalories() async {
+    if (foodName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a food name first.'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    if (quantity <= 0) {
+    if (foodQuantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Enter a valid food quantity in grams.'),
@@ -71,64 +361,169 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
       return;
     }
 
-    setState(() {
-      selectedFood = food;
-      calculatedCalories = ((food.calories / food.servingSizeG) * quantity).round();
-    });
-  }
+    int calories = calculatedCalories;
 
-  void saveCalories() {
-    if (calculatedCalories <= 0 || selectedFood == null) {
+    if (calories <= 0) {
+      calories = await getCaloriesFromBackend(showSuccessMessage: false);
+    }
+
+    if (calories <= 0) return;
+
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final userId = await ApiSessionStore.getUserId();
+
+      if (userId == null || userId <= 0) {
+        if (!mounted) return;
+
+        setState(() {
+          isSaving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User not found. Please login again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final savedFoodName = foodName;
+      final savedQuantity = foodQuantity;
+
+      final result = await CalorieCounterApi.createFood(
+        userId: userId,
+        foodName: savedFoodName,
+        foodQuantity: savedQuantity,
+        mealCategory: selectedMeal,
+        calories: calories.toDouble(),
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == false) {
+        setState(() {
+          isSaving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              CalorieCounterApi.asString(result['message']).isEmpty
+                  ? 'Failed to save calories.'
+                  : CalorieCounterApi.asString(result['message']),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        foodController.clear();
+        quantityController.clear();
+        calculatedCalories = 0;
+        isSaving = false;
+      });
+
+      await loadFoodLogFromBackend();
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Tap Get Calories first before saving.'),
+          content: Text('Calories saved to backend.'),
+          backgroundColor: Color(0xFF008000),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving calories: $error'),
           backgroundColor: Colors.red,
         ),
       );
-      return;
+    }
+  }
+
+  String foodLogTitle(dynamic entry) {
+    if (entry is! Map) return '';
+
+    final savedFoodName = getStringValue(
+      entry['FoodName'] ??
+          entry['foodName'] ??
+          entry['food_name'] ??
+          entry['food'],
+    );
+
+    final meal = getStringValue(
+      entry['MealCategory'] ??
+          entry['mealCategory'] ??
+          entry['meal_category'],
+    );
+
+    final quantity = getDoubleValue(
+      entry['FoodQuantity'] ??
+          entry['foodQuantity'] ??
+          entry['food_quantity'],
+    );
+
+    final buffer = StringBuffer();
+
+    if (savedFoodName.isNotEmpty) {
+      buffer.write(savedFoodName);
     }
 
-    LocalCalorieStore.addEntry(
-      food: '${selectedFood!.name} • $selectedMeal',
-      calories: calculatedCalories,
-    );
+    if (quantity > 0) {
+      buffer.write(' • ${quantity.toStringAsFixed(quantity % 1 == 0 ? 0 : 1)}g');
+    }
 
-    setState(() {
-      foodController.clear();
-      quantityController.clear();
-      selectedFood = null;
-      calculatedCalories = 0;
-    });
+    if (meal.isNotEmpty) {
+      buffer.write(' • $meal');
+    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Calories saved.'),
-        backgroundColor: Color(0xFF008000),
-      ),
-    );
+    return buffer.toString().isEmpty ? 'Food item' : buffer.toString();
+  }
+
+  int foodLogCalories(dynamic entry) {
+    if (entry is! Map) return 0;
+    return getIntValue(entry['Calories'] ?? entry['calories']);
   }
 
   @override
   Widget build(BuildContext context) {
-    final intake = LocalCalorieStore.totalIntake;
-    final left = LocalCalorieStore.remainingCalories;
+    final intake = calorieIntake;
+    final left = calorieRemaining;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFBF8),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
-          children: [
-            buildTopBar(),
-            const SizedBox(height: 12),
-            buildSubtitle(),
-            const SizedBox(height: 16),
-            buildSummaryRow(intake, left),
-            const SizedBox(height: 18),
-            buildInputCard(),
-            const SizedBox(height: 16),
-            buildRecentLog(),
-          ],
+        child: RefreshIndicator(
+          onRefresh: loadFoodLogFromBackend,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+            children: [
+              buildTopBar(),
+              const SizedBox(height: 12),
+              buildSubtitle(),
+              const SizedBox(height: 16),
+              buildSummaryRow(intake, left),
+              const SizedBox(height: 18),
+              buildInputCard(),
+              const SizedBox(height: 16),
+              buildRecentLog(),
+            ],
+          ),
         ),
       ),
     );
@@ -209,10 +604,18 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          if (isLoadingLog)
+            const SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
         ],
       ),
     );
   }
+
   Widget buildSummaryRow(int intake, int left) {
     return Row(
       children: [
@@ -262,11 +665,7 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
               color: Colors.white.withOpacity(0.18),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 22,
-            ),
+            child: Icon(icon, color: Colors.white, size: 22),
           ),
           const SizedBox(height: 8),
           Text(
@@ -291,6 +690,7 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
       ),
     );
   }
+
   Widget buildInputCard() {
     return Container(
       padding: const EdgeInsets.all(17),
@@ -310,7 +710,7 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           buildLabel('Food Type'),
-          buildFoodAutocomplete(),
+          buildFoodField(),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -339,14 +739,34 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
           buildLabel('Food Calorie'),
           buildCalorieResult(),
           const SizedBox(height: 15),
-          SizedBox(
-            width: double.infinity,
-            child: buildActionButton(
-              text: 'Save Calories',
-              icon: Icons.save_rounded,
-              light: false,
-              onTap: saveCalories,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: buildActionButton(
+                  text: isCalculating ? 'Getting...' : 'Get Calories',
+                  icon: Icons.calculate_rounded,
+                  light: true,
+                  onTap: isCalculating || isSaving
+                      ? null
+                      : () {
+                          getCaloriesFromBackend();
+                        },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: buildActionButton(
+                  text: isSaving ? 'Saving...' : 'Save Calories',
+                  icon: Icons.save_rounded,
+                  light: false,
+                  onTap: isSaving || isCalculating
+                      ? null
+                      : () {
+                          saveCalories();
+                        },
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -367,46 +787,19 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
     );
   }
 
-  Widget buildFoodAutocomplete() {
-    return Autocomplete<FoodItem>(
-      displayStringForOption: (item) => item.name,
-      optionsBuilder: (textEditingValue) {
-        final query = textEditingValue.text.toLowerCase();
-
-        if (query.isEmpty) {
-          return FilipinoFoodDatabase.items.take(8);
-        }
-
-        return FilipinoFoodDatabase.items.where(
-          (item) => item.name.toLowerCase().contains(query),
-        );
+  Widget buildFoodField() {
+    return TextField(
+      controller: foodController,
+      textInputAction: TextInputAction.next,
+      onChanged: (_) {
+        setState(() {
+          calculatedCalories = 0;
+        });
       },
-      onSelected: (item) {
-        foodController.text = item.name;
-        selectedFood = item;
-        recalculateCalories();
-      },
-      fieldViewBuilder: (
-        context,
-        controller,
-        focusNode,
-        onFieldSubmitted,
-      ) {
-        foodController.text = controller.text;
-
-        return TextField(
-          controller: controller,
-          focusNode: focusNode,
-          onChanged: (value) {
-            foodController.text = value;
-            recalculateCalories();
-          },
-          decoration: inputDecoration(
-            hint: 'Search Filipino food',
-            icon: Icons.fastfood_rounded,
-          ),
-        );
-      },
+      decoration: inputDecoration(
+        hint: 'Search food',
+        icon: Icons.fastfood_rounded,
+      ),
     );
   }
 
@@ -415,7 +808,9 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
       controller: quantityController,
       keyboardType: TextInputType.number,
       onChanged: (_) {
-        recalculateCalories();
+        setState(() {
+          calculatedCalories = 0;
+        });
       },
       decoration: inputDecoration(
         hint: 'grams',
@@ -427,6 +822,7 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
   Widget buildMealDropdown() {
     return DropdownButtonFormField<String>(
       value: selectedMeal,
+      isExpanded: true,
       decoration: inputDecoration(
         hint: 'Meal',
         icon: Icons.arrow_drop_down_circle_rounded,
@@ -457,14 +853,20 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
       ),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: Text(
-          calculatedCalories <= 0 ? '0 kcal' : '$calculatedCalories kcal',
-          style: const TextStyle(
-            color: Color(0xFF008000),
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
+        child: isCalculating
+            ? const SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(
+                calculatedCalories <= 0 ? '0 kcal' : '$calculatedCalories kcal',
+                style: const TextStyle(
+                  color: Color(0xFF008000),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
       ),
     );
   }
@@ -473,20 +875,24 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
     required String text,
     required IconData icon,
     required bool light,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     return ElevatedButton.icon(
       onPressed: onTap,
-      icon: Icon(icon),
-      label: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w900),
+      icon: Icon(icon, size: 20),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          text,
+          maxLines: 1,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: light ? Colors.white : const Color(0xFF1B8F2E),
         foregroundColor: light ? const Color(0xFF1B8F2E) : Colors.white,
         elevation: light ? 0 : 2,
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
         side: const BorderSide(
           color: Color(0xFF168A2A),
           width: 1.3,
@@ -528,20 +934,28 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
   }
 
   Widget buildRecentLog() {
-    final entries = LocalCalorieStore.entries;
+    final entries = foodLogs;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'Food Log',
-          style: TextStyle(
-            fontSize: 21,
-            fontWeight: FontWeight.w900,
-          ),
+          style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 10),
-        if (entries.isEmpty)
+        if (isLoadingLog && entries.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE1E8DE)),
+            ),
+            child: const Center(child: CircularProgressIndicator()),
+          )
+        else if (entries.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
@@ -578,14 +992,12 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      entry['food'] ?? '',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                      ),
+                      foodLogTitle(entry),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
                   Text(
-                    '${entry['calories']} kcal',
+                    '${foodLogCalories(entry)} kcal',
                     style: const TextStyle(
                       color: Color(0xFF008000),
                       fontWeight: FontWeight.w900,
@@ -599,17 +1011,3 @@ class _CalorieCounterScreenState extends State<CalorieCounterScreen> {
     );
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

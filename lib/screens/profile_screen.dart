@@ -4,6 +4,7 @@ import '../data/local_post_store.dart';
 import 'create_post_screen.dart';
 import 'dashboard_screen.dart';
 
+import '../widgets/profile_photo_avatar.dart';
 class ProfileScreen extends StatefulWidget {
   static const routeName = '/profile';
 
@@ -146,15 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: Colors.white,
               shape: BoxShape.circle,
             ),
-            child: const CircleAvatar(
-              radius: 32,
-              backgroundColor: Color(0xFFE8F5E9),
-              child: Icon(
-                Icons.person_rounded,
-                color: Color(0xFF008000),
-                size: 40,
-              ),
-            ),
+            child: const ProfilePhotoAvatar(radius: 32, iconSize: 40),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -244,15 +237,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Row(
         children: [
-          const CircleAvatar(
-            radius: 20,
-            backgroundColor: Color(0xFFE8F5E9),
-            child: Icon(
-              Icons.person_rounded,
-              color: Color(0xFF008000),
-              size: 26,
-            ),
-          ),
+          const ProfilePhotoAvatar(radius: 20, iconSize: 26),
           const SizedBox(width: 12),
           Expanded(
             child: GestureDetector(
@@ -424,15 +409,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ) {
     return Row(
       children: [
-        const CircleAvatar(
-          radius: 27,
-          backgroundColor: Color(0xFFE8F5E9),
-          child: Icon(
-            Icons.person_rounded,
-            color: Color(0xFF008000),
-            size: 34,
-          ),
-        ),
+        const ProfilePhotoAvatar(radius: 27, iconSize: 34),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

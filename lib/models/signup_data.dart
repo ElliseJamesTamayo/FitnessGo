@@ -20,6 +20,12 @@
   String email = '';
   String password = '';
 
+  int? userId;
+
+  num? backendDailyCalorieGoal;
+  double? backendBmi;
+  String? backendBmiStatus;
+
   double get bmi {
     if (weight == null || height == null || height == 0) return 0;
     final heightInMeters = height! / 100;
@@ -70,6 +76,34 @@
 
     return calories.round();
   }
+
+  int get displayDailyCalorieGoal {
+    final backendGoal = backendDailyCalorieGoal;
+
+    if (backendGoal != null && backendGoal > 0) {
+      return backendGoal.round();
+    }
+
+    return dailyCalorieGoal;
+  }
+
+  double get displayBmi {
+    final backendValue = backendBmi;
+
+    if (backendValue != null && backendValue > 0) {
+      return backendValue;
+    }
+
+    return bmi;
+  }
+
+  String get displayBmiStatus {
+    final backendStatus = backendBmiStatus;
+
+    if (backendStatus != null && backendStatus.trim().isNotEmpty) {
+      return backendStatus;
+    }
+
+    return bmiStatus;
+  }
 }
-
-

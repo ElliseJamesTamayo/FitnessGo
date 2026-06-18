@@ -12,6 +12,7 @@ import 'my_profile_screen.dart';
 import 'wellness_hub_screen.dart';
 import '../features/auth/screens/login/login_screen.dart';
 
+import '../widgets/profile_photo_avatar.dart';
 class DashboardScreen extends StatefulWidget {
   static const routeName = '/dashboard';
 
@@ -209,18 +210,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MyProfileScreen.routeName,
               );
             },
-            child: Container(
-              height: 68,
-              width: 68,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.person_rounded,
-                color: Colors.white,
-                size: 38,
-              ),
+            child: const ProfilePhotoAvatar(
+              radius: 34,
+              iconSize: 38,
+              backgroundColor: Colors.white24,
+              iconColor: Colors.white,
             ),
           ),
         ],
@@ -391,18 +385,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              height: 48,
-              width: 48,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEAF7EA),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.person_rounded,
-                color: Color(0xFF168A2A),
-                size: 27,
-              ),
+            const ProfilePhotoAvatar(
+              radius: 24,
+              iconSize: 27,
+              backgroundColor: Color(0xFFEAF7EA),
+              iconColor: Color(0xFF168A2A),
             ),
             const SizedBox(width: 13),
             const Expanded(
@@ -467,18 +454,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ProfileScreen.routeName,
               );
             },
-            child: Container(
-              height: 50,
-              width: 50,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEAF7EA),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.person_rounded,
-                color: Color(0xFF168A2A),
-                size: 28,
-              ),
+            child: const ProfilePhotoAvatar(
+              radius: 24,
+              iconSize: 28,
+              backgroundColor: Color(0xFFEAF7EA),
+              iconColor: Color(0xFF168A2A),
             ),
           ),
           const SizedBox(width: 11),
@@ -559,19 +539,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 48,
-            width: 48,
-            decoration: const BoxDecoration(
-              color: Color(0xFFEAF7EA),
-              shape: BoxShape.circle,
+          const ProfilePhotoAvatar(
+              radius: 24,
+              iconSize: 27,
+              backgroundColor: Color(0xFFEAF7EA),
+              iconColor: Color(0xFF168A2A),
             ),
-            child: const Icon(
-              Icons.person_rounded,
-              color: Color(0xFF168A2A),
-              size: 27,
-            ),
-          ),
           const SizedBox(width: 13),
           Expanded(
             child: Column(
@@ -722,6 +695,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
+
+
+
+
 
 
 
