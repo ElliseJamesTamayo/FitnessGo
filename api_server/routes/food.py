@@ -3,10 +3,94 @@ from datetime import date
 from fastapi import APIRouter, HTTPException, Query
 
 from my_connector import auth_tbl
-from api_server.schemas.food_schema import FoodCreate, FoodUpdate
+from api_server.schemas.food_schema import FoodCreate, FoodUpdate, FoodCalculateRequest
 from api_server.db_utils import fetch_all
 
+import os
+import requests
+
 router = APIRouter()
+
+
+@router.post("/calculate")
+def calculate_food_calories(food: FoodCalculateRequest):
+    food_item = food.FoodName.strip()
+    food_quantity = food.FoodQuantity
+
+    if not food_item:
+        raise HTTPException(status_code=400, detail="Food name is required.")
+
+    if food_quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than 0.")
+
+    api_key = "xkFc9jtNjCRrd7sdLRckPA==J9LAgoqCUBOn3xFC"
+
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Calorie Ninjas API key is missing.")
+
+    url = "https://api.calorieninjas.com/v1/nutrition"
+    headers = {
+        "X-Api-Key": api_key
+    }
+
+    query_text = f"{food_quantity}g {food_item}"
+
+    try:
+        response = requests.get(
+            url,
+            headers=headers,
+            params={"query": query_text},
+            timeout=10,
+        )
+    except requests.RequestException as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to connect to Calorie Ninjas API: {str(error)}",
+        )
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=response.text,
+        )
+
+    data = response.json()
+
+    if isinstance(data, dict):
+        items = data.get("items", [])
+    elif isinstance(data, list):
+        items = data
+    else:
+        items = []
+
+    total_calories = sum(
+        float(item.get("calories", 0))
+        for item in items
+        if isinstance(item, dict)
+    )
+
+    return {
+        "success": True,
+        "FoodName": food_item,
+        "FoodQuantity": food_quantity,
+        "Calories": round(total_calories, 2),
+        "items": items,
+    }
+
+
+@router.get("/calories")
+def get_food_calories(
+    food_name: str = Query(...),
+    grams: float = Query(100)
+):
+    calories = auth_tbl.get_food_calories(food_name, grams)
+
+    return {
+        "success": True,
+        "food_name": food_name,
+        "grams": grams,
+        "calories": calories
+    }
 
 
 @router.post("/")
