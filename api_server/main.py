@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api_server.routes import admin
+
 from api_server.routes import health
 from api_server.routes import auth
 from api_server.routes import profile
@@ -50,10 +50,9 @@ app.include_router(
     tags=["posts_tb"]
 )
 
-# IMPORTANT: api_client.py uses /exercises
 app.include_router(
     exercise.router,
-    prefix="/exercises",
+    prefix="/exercise",
     tags=["user_exercises / saved_exercises_by_user"]
 )
 
@@ -61,10 +60,4 @@ app.include_router(
     chat.router,
     prefix="/chat",
     tags=["ai_chats / ai_messages"]
-)
-
-app.include_router(
-    admin.router,
-    prefix="/admin",
-    tags=["Admin"]
 )
