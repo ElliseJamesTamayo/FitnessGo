@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../data/local_auth_store.dart';
 import '../data/local_calorie_store.dart';
@@ -8,6 +8,10 @@ import 'faqs_screen.dart';
 import 'weekly_progress_screen.dart';
 
 import '../widgets/profile_photo_avatar.dart';
+import 'package:image_picker/image_picker.dart';
+import '../core/storage/api_session_store.dart';
+import '../features/auth/data/auth_api.dart';
+
 class MyProfileScreen extends StatefulWidget {
   static const routeName = '/my-profile';
 
@@ -18,6 +22,7 @@ class MyProfileScreen extends StatefulWidget {
 }
 
 class _MyProfileScreenState extends State<MyProfileScreen> {
+  int _profilePhotoRefreshKey = 0;
   String fullName = 'User';
   String email = '';
   String goal = '';
@@ -56,10 +61,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     if (!mounted) return;
 
     setState(() {
-      fullName = savedName.trim().isEmpty ? LocalUserStore.displayName : savedName;
+      fullName = savedName.trim().isEmpty
+          ? LocalUserStore.displayName
+          : savedName;
       email = savedEmail;
       goal = savedGoal;
-      dailyGoal = savedDailyGoal > 0 ? savedDailyGoal : LocalCalorieStore.dailyGoal;
+      dailyGoal = savedDailyGoal > 0
+          ? savedDailyGoal
+          : LocalCalorieStore.dailyGoal;
       desiredWeight = savedDesiredWeight;
       bmi = savedBmi;
       bmiStatus = savedBmiStatus;
@@ -85,10 +94,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         .join(' ');
   }
 
-  double calculateBmiValue({
-    required double weight,
-    required double height,
-  }) {
+  double calculateBmiValue({required double weight, required double height}) {
     if (weight <= 0 || height <= 0) return 0;
     final heightM = height / 100;
     return weight / (heightM * heightM);
@@ -171,20 +177,17 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
           onPressed: onPressed,
           style: ElevatedButton.styleFrom(
             elevation: primary ? 2 : 0,
-            backgroundColor:
-                primary ? const Color(0xFF009600) : const Color(0xFFE4F1DC),
-            foregroundColor:
-                primary ? Colors.white : const Color(0xFF2F5D2F),
+            backgroundColor: primary
+                ? const Color(0xFF009600)
+                : const Color(0xFFE4F1DC),
+            foregroundColor: primary ? Colors.white : const Color(0xFF2F5D2F),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
             ),
           ),
           child: Text(
             text,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-            ),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
           ),
         ),
       ),
@@ -261,6 +264,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
     return calories.round();
   }
+
   String? validateDesiredWeightForGoal(String goalKey, double desired) {
     final normalizedGoal = normalizeGoalKey(goalKey);
 
@@ -287,6 +291,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
     return null;
   }
+
   void openEditGoalsDialog() {
     final goalOptions = <String, String>{
       'lose_weight': 'Lose Weight',
@@ -303,8 +308,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     final desiredController = TextEditingController(
       text: desiredWeight <= 0
           ? selectedGoal == 'keep_fit' && weightKg > 0
-              ? weightKg.toStringAsFixed(0)
-              : ''
+                ? weightKg.toStringAsFixed(0)
+                : ''
           : desiredWeight.toStringAsFixed(0),
     );
 
@@ -320,7 +325,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         desiredWeightValue: previewDesired,
       );
 
-      dailyController.text = previewDaily <= 0 ? 'Complete profile details first' : '$previewDaily kcal';
+      dailyController.text = previewDaily <= 0
+          ? 'Complete profile details first'
+          : '$previewDaily kcal';
     }
 
     refreshDailyGoalPreview();
@@ -410,7 +417,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                             selectedGoal = value;
 
                             if (selectedGoal == 'keep_fit' && weightKg > 0) {
-                              desiredController.text = weightKg.toStringAsFixed(0);
+                              desiredController.text = weightKg.toStringAsFixed(
+                                0,
+                              );
                             }
 
                             refreshDailyGoalPreview();
@@ -458,9 +467,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFF7FAF4),
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: const Color(0xFFDDE7D8),
-                          ),
+                          border: Border.all(color: const Color(0xFFDDE7D8)),
                         ),
                         child: const Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,14 +506,19 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                             text: 'Update',
                             primary: true,
                             onPressed: () async {
-                              final newDesired = selectedGoal == 'keep_fit' && weightKg > 0
+                              final newDesired =
+                                  selectedGoal == 'keep_fit' && weightKg > 0
                                   ? weightKg
-                                  : double.tryParse(desiredController.text.trim()) ?? 0;
+                                  : double.tryParse(
+                                          desiredController.text.trim(),
+                                        ) ??
+                                        0;
 
-                              final validationMessage = validateDesiredWeightForGoal(
-                                selectedGoal,
-                                newDesired,
-                              );
+                              final validationMessage =
+                                  validateDesiredWeightForGoal(
+                                    selectedGoal,
+                                    newDesired,
+                                  );
 
                               if (validationMessage != null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -535,7 +547,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                                 return;
                               }
 
-                              final newGoalLabel = goalOptions[selectedGoal] ?? titleCase(selectedGoal);
+                              final newGoalLabel =
+                                  goalOptions[selectedGoal] ??
+                                  titleCase(selectedGoal);
 
                               await LocalAuthStore.updateFitnessGoals(
                                 goal: newGoalLabel,
@@ -544,7 +558,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                               );
 
                               LocalCalorieStore.setDailyGoal(newDaily);
-    if (!mounted) return;
+                              if (!mounted) return;
 
                               setState(() {
                                 goal = newGoalLabel;
@@ -584,11 +598,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     final weightController = TextEditingController(
       text: weightKg <= 0 ? '' : weightKg.toStringAsFixed(0),
     );
-    final bmiController = TextEditingController(
-      text: bmi <= 0
-          ? ''
-          : '',
-    );
+    final bmiController = TextEditingController(text: bmi <= 0 ? '' : '');
 
     showDialog(
       context: context,
@@ -626,10 +636,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                   const Text(
                     'Edit Profile',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 24),
                   dialogLabel('Username'),
@@ -716,10 +723,15 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                           final newEmail = emailController.text.trim();
                           final newActivity = activityController.text.trim();
                           final newHealth = healthController.text.trim();
-                          final newAge = int.tryParse(ageController.text.trim()) ?? age;
+                          final newAge =
+                              int.tryParse(ageController.text.trim()) ?? age;
                           final newGender = genderController.text.trim();
-                          final newHeight = double.tryParse(heightController.text.trim()) ?? heightCm;
-                          final newWeight = double.tryParse(weightController.text.trim()) ?? weightKg;
+                          final newHeight =
+                              double.tryParse(heightController.text.trim()) ??
+                              heightCm;
+                          final newWeight =
+                              double.tryParse(weightController.text.trim()) ??
+                              weightKg;
 
                           final newBmi = calculateBmiValue(
                             weight: newWeight,
@@ -747,15 +759,19 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                             weight: newWeight,
                             bmi: newBmi,
                             bmiStatus: newBmiStatus,
-                            dailyGoal: recalculatedDailyGoal > 0 ? recalculatedDailyGoal : dailyGoal,
+                            dailyGoal: recalculatedDailyGoal > 0
+                                ? recalculatedDailyGoal
+                                : dailyGoal,
                           );
 
                           LocalUserStore.setFullName(newName);
 
                           if (recalculatedDailyGoal > 0) {
-                            LocalCalorieStore.setDailyGoal(recalculatedDailyGoal);
+                            LocalCalorieStore.setDailyGoal(
+                              recalculatedDailyGoal,
+                            );
                           }
-    if (!mounted) return;
+                          if (!mounted) return;
 
                           setState(() {
                             fullName = newName;
@@ -787,6 +803,66 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     );
   }
 
+  Future<void> _pickAndUploadProfilePhoto() async {
+    try {
+      final picker = ImagePicker();
+      final pickedImage = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (pickedImage == null) {
+        return;
+      }
+
+      final userId = await ApiSessionStore.getUserId();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (userId <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please log in again before updating your profile picture.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Uploading profile picture...')),
+      );
+
+      await AuthApi.uploadProfilePhoto(
+        userId: userId,
+        filePath: pickedImage.path,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _profilePhotoRefreshKey++;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile picture updated.')));
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update profile picture: $e')),
+      );
+    }
+  }
+
   Widget avatar() {
     return Stack(
       clipBehavior: Clip.none,
@@ -799,10 +875,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF12B81F),
-                Color(0xFF008000),
-              ],
+              colors: [Color(0xFF12B81F), Color(0xFF008000)],
             ),
             boxShadow: [
               BoxShadow(
@@ -812,9 +885,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               ),
             ],
           ),
-          child: const Padding(
-            padding: EdgeInsets.all(4),
+          child: Padding(
+            padding: const EdgeInsets.all(4),
             child: ProfilePhotoAvatar(
+              key: ValueKey(_profilePhotoRefreshKey),
               radius: 48,
               iconSize: 62,
               backgroundColor: Color(0xFF008000),
@@ -827,16 +901,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
           bottom: 2,
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
-            onTap: () => showComingSoon('Edit Profile Picture'),
+            onTap: _pickAndUploadProfilePhoto,
             child: Container(
               height: 34,
               width: 34,
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: const Color(0xFFE0EADC),
-                ),
+                border: Border.all(color: const Color(0xFFE0EADC)),
               ),
               child: const Icon(
                 Icons.edit_rounded,
@@ -858,11 +930,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     return Expanded(
       child: Column(
         children: [
-          Icon(
-            icon,
-            color: const Color(0xFF008000),
-            size: 23,
-          ),
+          Icon(icon, color: const Color(0xFF008000), size: 23),
           const SizedBox(height: 8),
           Text(
             label,
@@ -906,11 +974,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               color: Color(0xFFEAF7EA),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              color: Color(0xFF008000),
-              size: 20,
-            ),
+            child: Icon(icon, color: Color(0xFF008000), size: 20),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -952,11 +1016,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         padding: const EdgeInsets.symmetric(vertical: 13),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: color,
-              size: 22,
-            ),
+            Icon(icon, color: color, size: 22),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
@@ -979,17 +1039,15 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   }
 
   Widget divider() {
-    return Container(
-      height: 1,
-      color: const Color(0xFFEAF0E5),
-    );
+    return Container(height: 1, color: const Color(0xFFEAF0E5));
   }
 
   @override
   Widget build(BuildContext context) {
     final goalText = titleCase(goal);
-    final desiredText =
-        desiredWeight <= 0 ? 'N/A' : '${desiredWeight.toStringAsFixed(0)} kg';
+    final desiredText = desiredWeight <= 0
+        ? 'N/A'
+        : '${desiredWeight.toStringAsFixed(0)} kg';
     final bmiText = bmi <= 0
         ? 'N/A'
         : '${bmi.toStringAsFixed(1)}${bmiStatus.isEmpty ? '' : ' $bmiStatus'}';
@@ -1107,9 +1165,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(26),
-                border: Border.all(
-                  color: const Color(0xFFE4ECE0),
-                ),
+                border: Border.all(color: const Color(0xFFE4ECE0)),
               ),
               child: Column(
                 children: [
@@ -1193,9 +1249,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(26),
-                border: Border.all(
-                  color: const Color(0xFFE4ECE0),
-                ),
+                border: Border.all(color: const Color(0xFFE4ECE0)),
               ),
               child: Column(
                 children: [
@@ -1274,9 +1328,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(26),
-                border: Border.all(
-                  color: const Color(0xFFE4ECE0),
-                ),
+                border: Border.all(color: const Color(0xFFE4ECE0)),
               ),
               child: Column(
                 children: [
@@ -1330,16 +1382,3 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     );
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
