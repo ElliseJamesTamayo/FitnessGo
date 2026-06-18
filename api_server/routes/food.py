@@ -118,22 +118,31 @@ def create_food(payload: FoodCreate):
 @router.get("/user/{user_id}")
 def get_food_by_user_and_date(
     user_id: int,
-    log_date: str = Query(default=None)
+    log_date: date = Query(default_factory=date.today),
 ):
-    if log_date is None:
-        log_date = date.today().isoformat()
+    try:
+        foods = auth_tbl.get_user_food_entries_by_date(user_id, str(log_date))
 
-    rows = auth_tbl.get_user_food_entries_by_date(
-        user_id=user_id,
-        date_str=log_date
-    )
+        if not foods:
+            return {
+                "success": True,
+                "message": "No saved food yet.",
+                "foods": [],
+                "data": [],
+            }
 
-    return {
-        "success": True,
-        "UserId": user_id,
-        "date": log_date,
-        "foods": rows or []
-    }
+        return {
+            "success": True,
+            "message": "Food logs loaded successfully.",
+            "foods": foods,
+            "data": foods,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load food logs: {str(e)}",
+        )
 
 
 @router.get("/user/{user_id}/all")
