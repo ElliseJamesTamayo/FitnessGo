@@ -3,6 +3,13 @@
 import '../core/network/api_client.dart';
 import '../core/storage/api_session_store.dart';
 
+final ValueNotifier<int> profilePhotoRefreshNotifier =
+    ValueNotifier<int>(DateTime.now().millisecondsSinceEpoch);
+
+void refreshProfilePhotos() {
+  profilePhotoRefreshNotifier.value = DateTime.now().millisecondsSinceEpoch;
+}
+
 class ProfilePhotoAvatar extends StatefulWidget {
   final int? userId;
   final double radius;
@@ -27,15 +34,29 @@ class ProfilePhotoAvatar extends StatefulWidget {
 
 class _ProfilePhotoAvatarState extends State<ProfilePhotoAvatar> {
   late final Future<int> _userIdFuture;
-  late final int _cacheBust;
+  late int _cacheBust;
 
   @override
   void initState() {
     super.initState();
+    profilePhotoRefreshNotifier.addListener(_refreshPhoto);
     _cacheBust = DateTime.now().millisecondsSinceEpoch;
     _userIdFuture = widget.userId == null
         ? ApiSessionStore.getUserId()
         : Future<int>.value(widget.userId);
+  }
+
+  void _refreshPhoto() {
+    if (!mounted) return;
+    setState(() {
+      _cacheBust = profilePhotoRefreshNotifier.value;
+    });
+  }
+
+  @override
+  void dispose() {
+    profilePhotoRefreshNotifier.removeListener(_refreshPhoto);
+    super.dispose();
   }
 
   @override

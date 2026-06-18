@@ -902,6 +902,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         _profilePhotoRefreshKey++;
       });
 
+      refreshProfilePhotos();
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Profile picture updated.')));
