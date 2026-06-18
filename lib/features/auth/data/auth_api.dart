@@ -1,4 +1,4 @@
-﻿import '../../../core/network/api_client.dart';
+import '../../../core/network/api_client.dart';
 
 class AuthApi {
   static Future<Map<String, dynamic>> login({
@@ -51,6 +51,16 @@ class AuthApi {
 
   static Future<Map<String, dynamic>> getProfile(int userId) {
     return ApiClient.get('/profile/$userId');
+  }
+  static Future<Map<String, dynamic>> uploadProfilePhoto({
+    required int userId,
+    required String filePath,
+  }) {
+    return ApiClient.uploadFile(
+      '/profile/$userId/photo',
+      fieldName: 'image',
+      filePath: filePath,
+    );
   }
 }
 

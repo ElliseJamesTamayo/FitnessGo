@@ -8,6 +8,52 @@ import '../../../../../models/signup_data.dart';
 import '../../../../../widgets/app_button.dart';
 import '../../../data/auth_api.dart';
 
+double fgResponseDouble(
+  Map<String, dynamic> source,
+  List<String> keys,
+  double fallback,
+) {
+  for (final key in keys) {
+    final value = source[key];
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+  }
+  return fallback;
+}
+
+int fgResponseInt(
+  Map<String, dynamic> source,
+  List<String> keys,
+  int fallback,
+) {
+  for (final key in keys) {
+    final value = source[key];
+    if (value is int) return value;
+    if (value is num) return value.round();
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) return parsed.round();
+    }
+  }
+  return fallback;
+}
+
+String fgResponseString(
+  Map<String, dynamic> source,
+  List<String> keys,
+  String fallback,
+) {
+  for (final key in keys) {
+    final value = source[key];
+    if (value != null && value.toString().trim().isNotEmpty) {
+      return value.toString();
+    }
+  }
+  return fallback;
+}
 class SignupResultStep extends StatelessWidget {
   final SignupData data;
   final VoidCallback onFinish;
@@ -124,10 +170,10 @@ class SignupResultStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bmi = data.bmi;
+    final bmi = data.displayBmi;
     final bmiText = bmi == 0 ? '--' : bmi.toStringAsFixed(1);
-    final bmiStatus = data.bmiStatus;
-    final calories = data.dailyCalorieGoal.round();
+    final bmiStatus = data.displayBmiStatus;
+    final calories = data.displayDailyCalorieGoal.round();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 22),
@@ -221,89 +267,7 @@ class SignupResultStep extends StatelessWidget {
                     Expanded(
                       child: AppButton(
                         text: 'Dashboard',
-                        onPressed: () async {
-                          final selectedConditions = <String>[
-                            ...data.healthConditions,
-                          ];
-
-                          if (data.otherHealthCondition.trim().isNotEmpty) {
-                            selectedConditions.add(
-                              data.otherHealthCondition.trim(),
-                            );
-                          }
-
-                          final healthConditionText =
-                              data.hasHealthCondition == 'Yes' &&
-                                      selectedConditions.isNotEmpty
-                                  ? selectedConditions.join(', ')
-                                  : 'None';
-
-                          final registerResult = await AuthApi.register(
-                            username: data.username,
-                            email: data.email,
-                            password: data.password,
-                            fullname: data.fullName,
-                            age: data.age ?? 0,
-                            gender: data.gender,
-                            height: data.height ?? 0,
-                            weight: data.weight ?? 0,
-                            goal: data.goal,
-                            activityLevel: data.activityLevel,
-                            desiredWeight: data.desiredWeight,
-                            hasHealthConditions:
-                                data.hasHealthCondition.isEmpty
-                                    ? 'No'
-                                    : data.hasHealthCondition,
-                            whatHealthConditions: healthConditionText,
-                          );
-
-                          if (registerResult['success'] != true) {
-                            if (!context.mounted) return;
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  registerResult['message']?.toString() ??
-                                      'Signup failed. Please try again.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-
-                          final userId = int.tryParse(
-                                '${registerResult['UserId'] ?? registerResult['userId'] ?? 0}',
-                              ) ??
-                              0;
-
-                          if (userId > 0) {
-                            await ApiSessionStore.saveUserId(userId);
-                          }
-
-                          await LocalAuthStore.saveSignup(
-                            fullName: data.fullName,
-                            email: data.email,
-                            password: data.password,
-                            dailyGoal: data.dailyCalorieGoal,
-                            goal: data.goal,
-                            desiredWeight: data.desiredWeight ?? 0,
-                            bmi: data.bmi,
-                            bmiStatus: data.bmiStatus,
-                            activityLevel: data.activityLevel,
-                            healthCondition: healthConditionText,
-                            age: data.age ?? 0,
-                            gender: data.gender,
-                            height: data.height ?? 0,
-                            weight: data.weight ?? 0,
-                          );
-
-                          LocalUserStore.setFullName(data.fullName);
-                          LocalCalorieStore.setDailyGoal(data.dailyCalorieGoal);
-                          LocalCalorieStore.clear();
-
-                          if (!context.mounted) return;
-                          onFinish();
-                        },
+                        onPressed: onFinish,
                       ),
                     ),
                   ],
@@ -316,6 +280,12 @@ class SignupResultStep extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+
 
 
 

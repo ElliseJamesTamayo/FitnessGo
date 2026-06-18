@@ -2,6 +2,7 @@
 
 import '../../widgets/app_logo.dart';
 
+import '../../widgets/profile_photo_avatar.dart';
 class DashboardHeader extends StatelessWidget {
   final VoidCallback onLogout;
 
@@ -101,18 +102,12 @@ class DashboardHeroSummary extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.person,
-              color: Colors.white,
-              size: 36,
-            ),
+          const ProfilePhotoAvatar(
+            radius: 31,
+            iconSize: 36,
+            backgroundColor: Colors.white24,
+            iconColor: Colors.white,
+            fallbackIcon: Icons.person,
           ),
         ],
       ),
@@ -745,6 +740,8 @@ class _BottomNavItem extends StatelessWidget {
     );
   }
 }
+
+
 
 
 

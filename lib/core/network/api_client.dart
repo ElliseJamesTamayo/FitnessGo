@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
@@ -141,6 +141,52 @@ class ApiClient {
 
   static Future<Map<String, dynamic>> delete(String endpoint) {
     return request('DELETE', endpoint);
+  }
+  static Future<Map<String, dynamic>> uploadFile(
+    String endpoint, {
+    required String fieldName,
+    required String filePath,
+  }) async {
+    final request = http.MultipartRequest('PUT', _uri(endpoint));
+
+    request.files.add(
+      await http.MultipartFile.fromPath(fieldName, filePath),
+    );
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    dynamic decoded;
+    try {
+      decoded = response.body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body);
+    } catch (_) {
+      decoded = <String, dynamic>{
+        'message': response.body,
+      };
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+
+      return {
+        'success': true,
+        'data': decoded,
+      };
+    }
+
+    String message = 'Request failed with status ${response.statusCode}';
+
+    if (decoded is Map && decoded['detail'] != null) {
+      message = decoded['detail'].toString();
+    } else if (decoded is Map && decoded['message'] != null) {
+      message = decoded['message'].toString();
+    }
+
+    throw Exception(message);
   }
 }
 

@@ -7,6 +7,7 @@ import '../features/auth/screens/login/login_screen.dart';
 import 'faqs_screen.dart';
 import 'weekly_progress_screen.dart';
 
+import '../widgets/profile_photo_avatar.dart';
 class MyProfileScreen extends StatefulWidget {
   static const routeName = '/my-profile';
 
@@ -811,10 +812,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               ),
             ],
           ),
-          child: const Icon(
-            Icons.person_rounded,
-            color: Colors.white,
-            size: 62,
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: ProfilePhotoAvatar(
+              radius: 48,
+              iconSize: 62,
+              backgroundColor: Color(0xFF008000),
+              iconColor: Colors.white,
+            ),
           ),
         ),
         Positioned(
@@ -1325,6 +1330,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     );
   }
 }
+
+
 
 
 
