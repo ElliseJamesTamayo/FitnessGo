@@ -598,7 +598,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     final weightController = TextEditingController(
       text: weightKg <= 0 ? '' : weightKg.toStringAsFixed(0),
     );
-    final bmiController = TextEditingController(text: bmi <= 0 ? '' : '');
+    final bmiController = TextEditingController(
+      text: bmi <= 0 ? '' : bmi.toStringAsFixed(2),
+    );
 
     showDialog(
       context: context,
@@ -748,11 +750,54 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                             activityValue: newActivity,
                           );
 
+                          final normalizedHealth = newHealth.trim();
+                          final normalizedHealthLower = normalizedHealth
+                              .toLowerCase();
+                          final hasHealthCondition =
+                              normalizedHealth.isNotEmpty &&
+                              normalizedHealthLower != 'no' &&
+                              normalizedHealthLower != 'none' &&
+                              normalizedHealthLower != 'n/a';
+                          final savedHealthCondition = hasHealthCondition
+                              ? normalizedHealth
+                              : '';
+
+                          final userId = await ApiSessionStore.getUserId();
+
+                          if (!mounted) return;
+
+                          if (userId <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Please log in again before updating your profile.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          await AuthApi.updateProfile(
+                            userId: userId,
+                            username: usernameController.text.trim(),
+                            fullname: newName,
+                            age: newAge,
+                            gender: newGender,
+                            height: newHeight,
+                            weight: newWeight,
+                            activityLevel: newActivity,
+                            hasHealthConditions: newHealth.trim().isEmpty
+                                ? 'No'
+                                : 'Yes',
+                            whatHealthConditions: newHealth.trim().isEmpty
+                                ? null
+                                : newHealth,
+                          );
                           await LocalAuthStore.updateProfile(
                             fullName: newName,
                             email: newEmail,
                             activityLevel: newActivity,
-                            healthCondition: newHealth,
+                            healthCondition: savedHealthCondition,
                             age: newAge,
                             gender: newGender,
                             height: newHeight,
@@ -777,7 +822,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                             fullName = newName;
                             email = newEmail;
                             activityLevel = newActivity;
-                            healthCondition = newHealth;
+                            healthCondition = savedHealthCondition;
                             age = newAge;
                             gender = newGender;
                             heightCm = newHeight;
@@ -790,6 +835,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                           });
 
                           Navigator.pop(context);
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Profile updated successfully.'),
+                              ),
+                            );
+                          }
                         },
                       ),
                     ],

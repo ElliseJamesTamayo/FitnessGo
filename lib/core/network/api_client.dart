@@ -71,10 +71,7 @@ class ApiClient {
       } else if (method == 'DELETE') {
         response = await http.delete(uri).timeout(timeout);
       } else {
-        return {
-          'success': false,
-          'message': 'Unsupported request method.',
-        };
+        return {'success': false, 'message': 'Unsupported request method.'};
       }
 
       dynamic decoded;
@@ -101,20 +98,12 @@ class ApiClient {
       }
 
       if (decoded is Map) {
-        return decoded.map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
+        return decoded.map((key, value) => MapEntry(key.toString(), value));
       }
 
-      return {
-        'success': true,
-        'data': decoded,
-      };
+      return {'success': true, 'data': decoded};
     } catch (error) {
-      return {
-        'success': false,
-        'message': error.toString(),
-      };
+      return {'success': false, 'message': error.toString()};
     }
   }
 
@@ -142,6 +131,7 @@ class ApiClient {
   static Future<Map<String, dynamic>> delete(String endpoint) {
     return request('DELETE', endpoint);
   }
+
   static Future<Map<String, dynamic>> uploadFile(
     String endpoint, {
     required String fieldName,
@@ -149,9 +139,7 @@ class ApiClient {
   }) async {
     final request = http.MultipartRequest('PUT', _uri(endpoint));
 
-    request.files.add(
-      await http.MultipartFile.fromPath(fieldName, filePath),
-    );
+    request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
@@ -162,9 +150,7 @@ class ApiClient {
           ? <String, dynamic>{}
           : jsonDecode(response.body);
     } catch (_) {
-      decoded = <String, dynamic>{
-        'message': response.body,
-      };
+      decoded = <String, dynamic>{'message': response.body};
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -172,10 +158,7 @@ class ApiClient {
         return decoded;
       }
 
-      return {
-        'success': true,
-        'data': decoded,
-      };
+      return {'success': true, 'data': decoded};
     }
 
     String message = 'Request failed with status ${response.statusCode}';
@@ -189,5 +172,3 @@ class ApiClient {
     throw Exception(message);
   }
 }
-
-
