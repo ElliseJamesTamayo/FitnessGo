@@ -5,7 +5,6 @@ import '../data/local_calorie_store.dart';
 import '../data/local_user_store.dart';
 import '../features/auth/screens/login/login_screen.dart';
 import 'faqs_screen.dart';
-import 'weekly_progress_screen.dart';
 
 import '../widgets/profile_photo_avatar.dart';
 import 'package:image_picker/image_picker.dart';
@@ -1349,19 +1348,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     label: 'Health Condition',
                     value: healthCondition.isEmpty ? 'None' : healthCondition,
                   ),
-                  divider(),
-                  settingsTile(
-                    icon: Icons.bar_chart_rounded,
-                    title: 'Weekly Progress',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const WeeklyProgressScreen(),
-                        ),
-                      );
-                    },
-                  ),
                 ],
               ),
             ),
@@ -1405,12 +1391,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                       );
                     },
                   ),
-                  divider(),
-                  settingsTile(
-                    icon: Icons.lock_reset_rounded,
-                    title: 'Change Password',
-                    onTap: () => showComingSoon('Change Password'),
-                  ),
+
                   divider(),
                   settingsTile(
                     icon: Icons.logout_rounded,

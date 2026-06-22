@@ -1,6 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../core/storage/api_session_store.dart';
+import '../data/local_user_store.dart';
+import '../features/createpost/data/createpost_api.dart';
 import '../widgets/profile_photo_avatar.dart';
+
 class CreatePostScreen extends StatefulWidget {
   static const routeName = '/create-post';
 
@@ -12,9 +17,12 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final TextEditingController postController = TextEditingController();
+  final ImagePicker imagePicker = ImagePicker();
 
   String audience = 'Public';
   bool photoSelected = false;
+  bool isPosting = false;
+  XFile? selectedPhoto;
 
   @override
   void dispose() {
@@ -22,7 +30,23 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     super.dispose();
   }
 
-  void submitPost() {
+  Future<void> pickPhoto() async {
+    final image = await imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 45,
+    );
+
+    if (image == null) return;
+
+    setState(() {
+      selectedPhoto = image;
+      photoSelected = true;
+    });
+  }
+
+  Future<void> submitPost() async {
     final postText = postController.text.trim();
 
     if (postText.isEmpty && !photoSelected) {
@@ -35,17 +59,121 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       return;
     }
 
-    Navigator.pop(context, {
-      'content': postText,
-      'audience': audience,
-      'hasPhoto': photoSelected,
+    final userId = await ApiSessionStore.getUserId();
+
+    if (userId == null || userId <= 0) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User not found. Please login again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isPosting = true;
     });
+
+    try {
+      final result = await CreatePostApi.createPost(
+        userId: userId,
+        postText: postText,
+        audience: audience,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == false) {
+        setState(() {
+          isPosting = false;
+        });
+
+        final message = CreatePostApi.asString(result['message']);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message.isEmpty ? 'Failed to create post.' : message),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final postId = CreatePostApi.asInt(
+        result['PostId'] ?? result['postId'] ?? result['post_id'],
+      );
+
+      if (selectedPhoto != null && postId > 0) {
+        final imageResult = await CreatePostApi.uploadPostImage(
+          postId: postId,
+          imagePath: selectedPhoto!.path,
+        );
+
+        if (!mounted) return;
+
+        if (imageResult['success'] == false) {
+          setState(() {
+            isPosting = false;
+          });
+
+          final message = CreatePostApi.asString(imageResult['message']);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                message.isEmpty
+                    ? 'Post saved, but image upload failed.'
+                    : message,
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return;
+        }
+      }
+
+      Navigator.pop(context, {
+        'content': postText,
+        'PostText': postText,
+        'audience': audience,
+        'Audience': audience,
+        'hasPhoto': photoSelected.toString(),
+        'HasPhoto': photoSelected ? 1 : 0,
+        'imagePath': selectedPhoto?.path ?? '',
+        'name': LocalUserStore.displayName.isEmpty
+            ? 'User'
+            : LocalUserStore.displayName,
+        'Fullname': LocalUserStore.displayName.isEmpty
+            ? 'User'
+            : LocalUserStore.displayName,
+        'UserId': userId,
+        'userId': userId,
+        'PostId': postId,
+        'postId': postId,
+        'time': 'Just now',
+        'refresh': 'true',
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        isPosting = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error creating post: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   IconData get audienceIcon {
-    return audience == 'Only Me'
-        ? Icons.lock_rounded
-        : Icons.public_rounded;
+    return audience == 'Only Me' ? Icons.lock_rounded : Icons.public_rounded;
   }
 
   String get audienceHint {
@@ -106,25 +234,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ),
           ),
           ElevatedButton(
-            onPressed: submitPost,
+            onPressed: isPosting ? null : submitPost,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF008000),
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 23,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 23, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
             ),
-            child: const Text(
-              'Post',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 15,
-              ),
+            child: Text(
+              isPosting ? 'Posting...' : 'Post',
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
             ),
           ),
         ],
@@ -138,9 +260,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: const Color(0xFFE2EBDD),
-        ),
+        border: Border.all(color: const Color(0xFFE2EBDD)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.055),
@@ -168,9 +288,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'User',
-                style: TextStyle(
+              Text(
+                LocalUserStore.displayName.isEmpty
+                    ? 'User'
+                    : LocalUserStore.displayName,
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
                   color: Colors.black,
@@ -194,25 +316,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         });
       },
       color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       itemBuilder: (context) {
         return const [
           PopupMenuItem(
             value: 'Public',
             child: Row(
               children: [
-                Icon(
-                  Icons.public_rounded,
-                  color: Color(0xFF008000),
-                  size: 20,
-                ),
+                Icon(Icons.public_rounded, color: Color(0xFF008000), size: 20),
                 SizedBox(width: 10),
-                Text(
-                  'Public',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
+                Text('Public', style: TextStyle(fontWeight: FontWeight.w800)),
               ],
             ),
           ),
@@ -220,16 +333,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             value: 'Only Me',
             child: Row(
               children: [
-                Icon(
-                  Icons.lock_rounded,
-                  color: Color(0xFF008000),
-                  size: 20,
-                ),
+                Icon(Icons.lock_rounded, color: Color(0xFF008000), size: 20),
                 SizedBox(width: 10),
-                Text(
-                  'Only Me',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
+                Text('Only Me', style: TextStyle(fontWeight: FontWeight.w800)),
               ],
             ),
           ),
@@ -240,18 +346,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFFE8F5E9),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: const Color(0xFFB9E5B9),
-          ),
+          border: Border.all(color: const Color(0xFFB9E5B9)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              audienceIcon,
-              color: const Color(0xFF008000),
-              size: 16,
-            ),
+            Icon(audienceIcon, color: const Color(0xFF008000), size: 16),
             const SizedBox(width: 6),
             Text(
               audience,
@@ -304,9 +404,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFFE2EBDD),
-        ),
+        border: Border.all(color: const Color(0xFFE2EBDD)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.045),
@@ -329,16 +427,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
           InkWell(
             borderRadius: BorderRadius.circular(22),
-            onTap: () {
-              setState(() {
-                photoSelected = !photoSelected;
-              });
-            },
+            onTap: pickPhoto,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: photoSelected
                     ? const Color(0xFF008000)
@@ -381,9 +472,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFFB9E5B9),
-        ),
+        border: Border.all(color: const Color(0xFFB9E5B9)),
       ),
       child: Row(
         children: [
@@ -394,11 +483,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               color: Color(0xFFE8F5E9),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              audienceIcon,
-              color: const Color(0xFF008000),
-              size: 20,
-            ),
+            child: Icon(audienceIcon, color: const Color(0xFF008000), size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -417,6 +502,3 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 }
-
-
-

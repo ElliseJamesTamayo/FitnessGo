@@ -4,7 +4,7 @@ import 'screens/welcome_screen.dart';
 import 'screens/role_screen.dart';
 import 'features/auth/screens/login/login_screen.dart';
 import 'screens/dashboard_screen.dart';
-import 'features/caloriecounter/screen/calorie_counter_screen.dart';
+import 'caloriecounter/screen/calorie_counter_screen.dart';
 import 'screens/fitness_buddy_screen.dart';
 import 'screens/activity_log_screen.dart';
 import 'screens/wellness_hub_screen.dart';
@@ -28,9 +28,7 @@ class FitnessGoApp extends StatelessWidget {
       scrollBehavior: const NoStretchScrollBehavior(),
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF008000),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF008000)),
         scaffoldBackgroundColor: const Color(0xFFE6E6E6),
       ),
       initialRoute: WelcomeScreen.routeName,
@@ -40,7 +38,8 @@ class FitnessGoApp extends StatelessWidget {
         LoginScreen.routeName: (context) => const LoginScreen(),
         SignupFlowScreen.routeName: (context) => const SignupFlowScreen(),
         DashboardScreen.routeName: (context) => const DashboardScreen(),
-        CalorieCounterScreen.routeName: (context) => const CalorieCounterScreen(),
+        CalorieCounterScreen.routeName: (context) =>
+            const CalorieCounterScreen(),
         FitnessBuddyScreen.routeName: (context) => const FitnessBuddyScreen(),
         ActivityLogScreen.routeName: (context) => const ActivityLogScreen(),
         WellnessHubScreen.routeName: (context) => const WellnessHubScreen(),
@@ -69,13 +68,3 @@ class NoStretchScrollBehavior extends MaterialScrollBehavior {
     return const ClampingScrollPhysics();
   }
 }
-
-
-
-
-
-
-
-
-
-

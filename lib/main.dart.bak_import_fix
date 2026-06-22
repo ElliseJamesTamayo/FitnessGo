@@ -28,9 +28,7 @@ class FitnessGoApp extends StatelessWidget {
       scrollBehavior: const NoStretchScrollBehavior(),
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF008000),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF008000)),
         scaffoldBackgroundColor: const Color(0xFFE6E6E6),
       ),
       initialRoute: WelcomeScreen.routeName,
@@ -40,7 +38,8 @@ class FitnessGoApp extends StatelessWidget {
         LoginScreen.routeName: (context) => const LoginScreen(),
         SignupFlowScreen.routeName: (context) => const SignupFlowScreen(),
         DashboardScreen.routeName: (context) => const DashboardScreen(),
-        CalorieCounterScreen.routeName: (context) => const CalorieCounterScreen(),
+        CalorieCounterScreen.routeName: (context) =>
+            const CalorieCounterScreen(),
         FitnessBuddyScreen.routeName: (context) => const FitnessBuddyScreen(),
         ActivityLogScreen.routeName: (context) => const ActivityLogScreen(),
         WellnessHubScreen.routeName: (context) => const WellnessHubScreen(),
@@ -69,13 +68,3 @@ class NoStretchScrollBehavior extends MaterialScrollBehavior {
     return const ClampingScrollPhysics();
   }
 }
-
-
-
-
-
-
-
-
-
-

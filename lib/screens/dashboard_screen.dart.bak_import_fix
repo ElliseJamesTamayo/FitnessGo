@@ -1,4 +1,3 @@
-import '../features/caloriecounter/screen/calorie_counter_screen.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -14,6 +13,7 @@ import '../data/local_calorie_store.dart';
 import '../data/local_post_store.dart';
 import '../features/fitnesswall/fitnesswall.dart';
 import 'activity_log_screen.dart';
+import '';
 import 'create_post_screen.dart';
 import 'fitness_buddy_screen.dart';
 import 'profile_screen.dart';
@@ -538,7 +538,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: buildCalorieBox(
             icon: Icons.restaurant_rounded,
             title: 'Calorie Intake',
-            value: '$displayedIntake',
+            value: '$displayedIntake kcal',
           ),
         ),
         const SizedBox(width: 14),
@@ -548,7 +548,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             title: remaining < 0
                 ? 'Calorie Goal Exceeded'
                 : 'Remaining Calories',
-            value: '$displayedRemaining',
+            value: '$displayedRemaining kcal',
           ),
         ),
       ],
@@ -594,20 +594,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 7),
-                SizedBox(
-                  width: double.infinity,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      value,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: Color(0xFF168A2A),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF168A2A),
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ],
@@ -629,9 +623,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget buildFitnessWall(List<Map<String, dynamic>> userPosts) {
-    final posts = userPosts
-        .where(FitnessWallApi.isPublicPost)
-        .toList();
+    final starterPosts = <Map<String, dynamic>>[
+      {
+        'name': 'FitnessGo Team',
+        'time': 'Today',
+        'content':
+            'Welcome to FitnessGo! Share your progress and stay consistent.',
+      },
+      {
+        'name': 'System Reminder',
+        'time': 'Today',
+        'content':
+            'Track your meals, log your activities, and keep moving toward your goal.',
+      },
+    ];
+
+    final posts = [
+      ...userPosts.where(FitnessWallApi.isPublicPost),
+      ...starterPosts,
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

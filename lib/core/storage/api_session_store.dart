@@ -18,5 +18,3 @@ class ApiSessionStore {
     await prefs.remove(_userIdKey);
   }
 }
-
-
