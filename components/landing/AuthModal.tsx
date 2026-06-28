@@ -6,6 +6,9 @@ import { Lock, Mail, Package, X } from "lucide-react";
 
 type AuthMode = "login" | "signup";
 
+const PLATFORM_ADMIN_EMAIL = "platformadmin@stocknbook.com";
+const PLATFORM_ADMIN_PASSWORD = "Admin@12345";
+
 export default function AuthModal({
                                       mode,
                                       onClose,
@@ -45,6 +48,40 @@ export default function AuthModal({
                 alert("Passwords do not match.");
                 return;
             }
+        }
+
+        /*
+          TEMPORARY FRONTEND-ONLY PLATFORM ADMIN LOGIN.
+          It does not call Lambda, RDS, or any backend.
+        */
+        if (
+            mode === "login" &&
+            email.trim().toLowerCase() === PLATFORM_ADMIN_EMAIL &&
+            password === PLATFORM_ADMIN_PASSWORD
+        ) {
+            const adminUser = {
+                platform_admin_id: 1,
+                full_name: "Platform Administrator",
+                email: PLATFORM_ADMIN_EMAIL,
+                role: "PLATFORM_ADMIN",
+            };
+
+            sessionStorage.clear();
+
+            sessionStorage.setItem("token", "platform-admin-ui-demo");
+            sessionStorage.setItem("role", "PLATFORM_ADMIN");
+            sessionStorage.setItem("user", JSON.stringify(adminUser));
+            sessionStorage.setItem(
+                "full_name",
+                "Platform Administrator"
+            );
+            sessionStorage.setItem("isLoggedIn", "true");
+
+            setLoading(true);
+            onClose();
+
+            router.replace("/platform-admin/dashboard");
+            return;
         }
 
         setLoading(true);
@@ -92,16 +129,30 @@ export default function AuthModal({
                 sessionStorage.setItem("role", data.role || "owner");
 
                 if (data.role === "manager") {
-                    sessionStorage.setItem("manager_id", String(data.manager_id));
-                    sessionStorage.setItem("manager_name", data.manager_name || "");
-                    sessionStorage.setItem("manager_email", data.manager_email || "");
-                    sessionStorage.setItem("branch_id", String(data.branch_id));
-                    sessionStorage.setItem("branch_name", data.branch_name || "");
+                    sessionStorage.setItem(
+                        "manager_id",
+                        String(data.manager_id)
+                    );
+                    sessionStorage.setItem(
+                        "manager_name",
+                        data.manager_name || ""
+                    );
+                    sessionStorage.setItem(
+                        "manager_email",
+                        data.manager_email || ""
+                    );
+                    sessionStorage.setItem(
+                        "branch_id",
+                        String(data.branch_id)
+                    );
+                    sessionStorage.setItem(
+                        "branch_name",
+                        data.branch_name || ""
+                    );
                     sessionStorage.setItem(
                         "permissions",
                         JSON.stringify(data.permissions || {})
                     );
-
                     sessionStorage.setItem(
                         "packages_manage",
                         String(Boolean(data.permissions?.packages_manage))
@@ -109,27 +160,42 @@ export default function AuthModal({
                 }
 
                 if (data.role === "staff") {
-                    sessionStorage.setItem("staff_id", String(data.staff_id));
-                    sessionStorage.setItem("staff_name", data.staff_name || "");
-                    sessionStorage.setItem("staff_email", data.staff_email || "");
-                    sessionStorage.setItem("branch_id", String(data.branch_id));
-                    sessionStorage.setItem("branch_name", data.branch_name || "");
+                    sessionStorage.setItem(
+                        "staff_id",
+                        String(data.staff_id)
+                    );
+                    sessionStorage.setItem(
+                        "staff_name",
+                        data.staff_name || ""
+                    );
+                    sessionStorage.setItem(
+                        "staff_email",
+                        data.staff_email || ""
+                    );
+                    sessionStorage.setItem(
+                        "branch_id",
+                        String(data.branch_id)
+                    );
+                    sessionStorage.setItem(
+                        "branch_name",
+                        data.branch_name || ""
+                    );
                     sessionStorage.setItem(
                         "permissions",
                         JSON.stringify(data.permissions || {})
                     );
-
                     sessionStorage.setItem(
                         "packages_manage",
                         String(Boolean(data.permissions?.packages_manage))
                     );
                 }
 
+                onClose();
                 router.push("/dashboard");
             } else {
                 onSignupSuccess();
             }
-        } catch (error) {
+        } catch {
             alert("Something went wrong. Please try again.");
         } finally {
             setLoading(false);
@@ -152,34 +218,41 @@ export default function AuthModal({
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-[#C9951A]">
                                 <Package className="h-5 w-5" />
                             </div>
+
                             <span className="text-lg font-semibold">
-                <span className="text-[#F5E8C0]">Stock</span>NBook
-              </span>
+                                <span className="text-[#F5E8C0]">Stock</span>
+                                NBook
+                            </span>
                         </div>
 
                         <h2 className="mt-14 font-serif text-4xl leading-tight">
                             {mode === "login" ? (
                                 <>
                                     Welcome back to your{" "}
-                                    <span className="italic text-[#F5E8C0]">business.</span>
+                                    <span className="italic text-[#F5E8C0]">
+                                        business.
+                                    </span>
                                 </>
                             ) : (
                                 <>
                                     Start your{" "}
-                                    <span className="italic text-[#F5E8C0]">celebration</span>{" "}
+                                    <span className="italic text-[#F5E8C0]">
+                                        celebration
+                                    </span>{" "}
                                     business here.
                                 </>
                             )}
                         </h2>
 
                         <p className="mt-5 max-w-sm text-sm leading-7 text-white/60">
-                            Manage your events, bookings, inventory, and team from one clean
-                            dashboard.
+                            Manage your events, bookings, inventory, and team
+                            from one clean dashboard.
                         </p>
                     </div>
 
                     <p className="border-t border-white/10 pt-6 font-serif text-sm leading-7 text-white/70">
-                        “Mas madali na ang buhay ko. Everything is in one place.”
+                        “Mas madali na ang buhay ko. Everything is in one
+                        place.”
                     </p>
                 </div>
 
@@ -188,9 +261,10 @@ export default function AuthModal({
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2D1B4E] text-[#C9951A]">
                             <Package className="h-5 w-5" />
                         </div>
+
                         <span className="text-lg font-semibold text-[#2D1B4E]">
-              StockNBook
-            </span>
+                            StockNBook
+                        </span>
                     </div>
 
                     <h1 className="font-serif text-4xl text-[#1A1220]">
@@ -218,7 +292,9 @@ export default function AuthModal({
                                     placeholder="e.g. Santos Events & Party Supply"
                                     value={storeName}
                                     onChange={setStoreName}
-                                    icon={<Package className="h-5 w-5 text-[#7A6E88]" />}
+                                    icon={
+                                        <Package className="h-5 w-5 text-[#7A6E88]" />
+                                    }
                                 />
 
                                 <TextInput
@@ -241,7 +317,9 @@ export default function AuthModal({
                         <TextInput
                             label="Password"
                             placeholder={
-                                mode === "login" ? "Enter your password" : "Create a password"
+                                mode === "login"
+                                    ? "Enter your password"
+                                    : "Create a password"
                             }
                             type="password"
                             value={password}
@@ -256,7 +334,9 @@ export default function AuthModal({
                                 type="password"
                                 value={confirmPassword}
                                 onChange={setConfirmPassword}
-                                icon={<Lock className="h-5 w-5 text-[#7A6E88]" />}
+                                icon={
+                                    <Lock className="h-5 w-5 text-[#7A6E88]" />
+                                }
                             />
                         )}
 
@@ -266,7 +346,11 @@ export default function AuthModal({
                                     <input type="checkbox" />
                                     Remember me
                                 </label>
-                                <button type="button" className="font-medium text-[#2D1B4E]">
+
+                                <button
+                                    type="button"
+                                    className="font-medium text-[#2D1B4E]"
+                                >
                                     Forgot password?
                                 </button>
                             </div>
@@ -276,15 +360,15 @@ export default function AuthModal({
                             <label className="flex items-start gap-2 text-sm text-[#7A6E88]">
                                 <input type="checkbox" className="mt-1" />
                                 <span>
-                  I agree to the{" "}
+                                    I agree to the{" "}
                                     <span className="font-medium text-[#2D1B4E]">
-                    Terms of Service
-                  </span>{" "}
+                                        Terms of Service
+                                    </span>{" "}
                                     and{" "}
                                     <span className="font-medium text-[#2D1B4E]">
-                    Privacy Policy
-                  </span>
-                </span>
+                                        Privacy Policy
+                                    </span>
+                                </span>
                             </label>
                         )}
 
@@ -307,7 +391,11 @@ export default function AuthModal({
                             : "Already have an account?"}{" "}
                         <button
                             type="button"
-                            onClick={() => onSwitch(mode === "login" ? "signup" : "login")}
+                            onClick={() =>
+                                onSwitch(
+                                    mode === "login" ? "signup" : "login"
+                                )
+                            }
                             className="font-semibold text-[#2D1B4E]"
                         >
                             {mode === "login" ? "Sign up free" : "Log in"}
@@ -354,4 +442,3 @@ function TextInput({
         </div>
     );
 }
-

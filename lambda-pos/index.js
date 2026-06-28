@@ -12,61 +12,70 @@ const dbConfig = {
     ssl: { rejectUnauthorized: false },
 };
 
+function jsonResponse(statusCode, headers, body) {
+    return {
+        statusCode,
+        headers,
+        body: JSON.stringify(body),
+    };
+}
+
 function badRequest(headers, message) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: message }) };
+    return jsonResponse(400, headers, { error: message });
 }
+
 function unauthorized(headers, message) {
-    return { statusCode: 401, headers, body: JSON.stringify({ error: message }) };
+    return jsonResponse(401, headers, { error: message });
 }
-function serverError(headers) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: "Internal server error" }) };
+
+function notFound(headers, message) {
+    return jsonResponse(404, headers, { error: message });
+}
+
+function serverError(headers, error) {
+    console.error("POS Lambda error:", error);
+
+    return jsonResponse(500, headers, {
+        error:
+            error instanceof Error
+                ? error.message
+                : "Internal server error",
+    });
 }
 
 function toSafeString(value, max = 255) {
     return String(value ?? "").trim().slice(0, max);
 }
+
 function toNumber(value) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
 }
+
+function toPositiveInteger(value) {
+    const number = Number(value);
+    return Number.isInteger(number) && number > 0 ? number : null;
+}
+
 function toISODate(value) {
     const raw = toSafeString(value, 40);
-    const iso = new Date(raw);
+
     if (!raw) return null;
-    if (!Number.isFinite(iso.getTime())) return null;
-    return iso.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    const date = new Date(raw);
+
+    if (!Number.isFinite(date.getTime())) {
+        return null;
+    }
+
+    return date.toISOString().slice(0, 10);
 }
 
-function formatOrderItems(items) {
-    if (!Array.isArray(items)) return "";
-
-    return items
-        .map((line) => {
-            const productName = toSafeString(
-                line.product_name ??
-                line.productName ??
-                line.name ??
-                line.item ??
-                `Product #${line.product_id ?? line.id ?? ""}`,
-                100
-            );
-
-            const variantName = toSafeString(
-                line.variant_name ??
-                line.variantName ??
-                line.variant ??
-                line.option ??
-                line.size ??
-                "",
-                100
-            );
-
-            const qty = toNumber(line.quantity ?? line.qty) ?? 1;
-
-            return `${productName}${variantName ? ` - ${variantName}` : ""} x${qty}`;
-        })
-        .filter(Boolean)
-        .join(", ");
+function normalizeAction(value) {
+    return toSafeString(value, 80)
+        .replace(/([a-z])([A-Z])/g, "$1_$2")
+        .replace(/[-\s]+/g, "_")
+        .toLowerCase();
 }
 
 function getOrderLines(body) {
@@ -77,15 +86,15 @@ function getOrderLines(body) {
         body.cart ||
         body.cartItems;
 
-    if (Array.isArray(items)) return items;
+    if (Array.isArray(items)) {
+        return items;
+    }
 
     if (
         body.product_id ||
         body.productId ||
         body.variant_id ||
         body.variantId ||
-        body.product_variant_id ||
-        body.productVariantId ||
         body.item
     ) {
         return [body];
@@ -94,143 +103,223 @@ function getOrderLines(body) {
     return [];
 }
 
-function toPositiveInteger(value) {
-    const n = Number(value);
-    return Number.isInteger(n) && n > 0 ? n : null;
+function getProductId(line) {
+    return toPositiveInteger(
+        line.product_id ??
+        line.productId ??
+        line.product?.id
+    );
 }
 
-function normalizeAction(value) {
-    return toSafeString(value, 80)
-        .replace(/([a-z])([A-Z])/g, "$1_$2")
-        .replace(/[-\s]+/g, "_")
-        .toLowerCase();
+function getVariantId(line) {
+    return toPositiveInteger(
+        line.variant_id ??
+        line.variantId ??
+        line.product_variant_id ??
+        line.productVariantId ??
+        line.variant?.id
+    );
+}
+
+function getProductName(line) {
+    return toSafeString(
+        line.product_name ??
+        line.productName ??
+        line.item_name ??
+        line.product?.name ??
+        line.name ??
+        line.item ??
+        "",
+        150
+    );
+}
+
+function getVariantName(line) {
+    return toSafeString(
+        line.variant_name ??
+        line.variantName ??
+        line.variant_label ??
+        line.variantLabel ??
+        line.variant ??
+        line.option ??
+        line.size ??
+        "",
+        150
+    );
+}
+
+function formatOrderItems(items) {
+    if (!Array.isArray(items)) {
+        return "";
+    }
+
+    return items
+        .map((line) => {
+            const productName =
+                getProductName(line) ||
+                `Product #${getProductId(line) || ""}`;
+
+            const variantName = getVariantName(line);
+            const quantity =
+                toPositiveInteger(line.quantity ?? line.qty) || 1;
+
+            return `${productName}${variantName ? ` - ${variantName}` : ""} x${quantity}`;
+        })
+        .filter(Boolean)
+        .join(", ");
 }
 
 async function ensureStoreExists(connection, storeId) {
-    const parsed = Number(storeId);
-    if (!Number.isInteger(parsed) || parsed <= 0) return false;
-    const [rows] = await connection.execute("SELECT id FROM stores WHERE id = ? LIMIT 1", [parsed]);
+    const parsedStoreId = Number(storeId);
+
+    if (!Number.isInteger(parsedStoreId) || parsedStoreId <= 0) {
+        return false;
+    }
+
+    const [rows] = await connection.execute(
+        "SELECT id FROM stores WHERE id = ? LIMIT 1",
+        [parsedStoreId]
+    );
+
     return rows.length > 0;
 }
 
-async function decreaseStockForOrder(connection, storeId, items) {
-    const lines = Array.isArray(items) ? items : [];
+async function ensureBranchBelongsToStore(connection, branchId, storeId) {
+    const parsedBranchId = Number(branchId);
+    const parsedStoreId = Number(storeId);
 
-    for (const line of lines) {
-        const qty = toPositiveInteger(line.quantity ?? line.qty) || 1;
+    if (!Number.isInteger(parsedBranchId) || parsedBranchId <= 0) {
+        return false;
+    }
 
-        const variantId = toPositiveInteger(
-            line.variant_id ??
-            line.variantId ??
-            line.product_variant_id ??
-            line.productVariantId ??
-            line.variant?.id
-        );
+    if (!Number.isInteger(parsedStoreId) || parsedStoreId <= 0) {
+        return false;
+    }
 
-        const productId = toPositiveInteger(
-            line.product_id ??
-            line.productId ??
-            line.product?.id
-        );
+    const [rows] = await connection.execute(
+        "SELECT id FROM branches WHERE id = ? AND store_id = ? LIMIT 1",
+        [parsedBranchId, parsedStoreId]
+    );
 
-        let productName = toSafeString(
-            line.product_name ??
-            line.productName ??
-            line.product?.name ??
-            line.name ??
-            line.item ??
-            "",
-            150
-        );
+    return rows.length > 0;
+}
 
-        let variantName = toSafeString(
-            line.variant_name ??
-            line.variantName ??
-            line.variant_label ??
-            line.variantLabel ??
-            line.variant ??
-            line.option ??
-            line.size ??
-            "",
-            150
-        );
+async function insertOrderItems(connection, orderId, items) {
+    for (const line of items) {
+        const productId = getProductId(line);
+        const variantId = getVariantId(line);
+        const quantity = toPositiveInteger(line.quantity ?? line.qty);
 
-        const combinedItem = toSafeString(line.item ?? line.name ?? "", 255);
+        const productName =
+            getProductName(line) ||
+            `Product #${productId || ""}`;
 
-        if (!variantName && combinedItem.includes("/")) {
-            const parts = combinedItem.split("/");
-            productName = toSafeString(parts[0], 150);
-            variantName = toSafeString(parts.slice(1).join("/").replace(/\sx\d+$/i, ""), 150);
+        const unitPrice =
+            toNumber(
+                line.unit_price ??
+                line.unitPrice ??
+                line.price ??
+                line.sales_price ??
+                line.salesPrice
+            ) ?? 0;
+
+        if (!productId) {
+            throw new Error("Each POS item must include a valid product_id.");
         }
 
-        const variantTokens = variantName
-            .toLowerCase()
-            .replace(/\sx\d+$/i, "")
-            .split(/[\/,|]+/)
-            .map((token) => token.trim())
-            .filter(Boolean);
+        if (!quantity) {
+            throw new Error("Each POS item must include a valid quantity.");
+        }
+
+        await connection.execute(
+            `INSERT INTO order_items
+                (order_id, product_id, variant_id, product_name, quantity, unit_price)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+                orderId,
+                productId,
+                variantId || null,
+                productName,
+                quantity,
+                unitPrice,
+            ]
+        );
+    }
+}
+
+async function decreaseStockForOrder(
+    connection,
+    storeId,
+    branchId,
+    items
+) {
+    for (const line of items) {
+        const quantity =
+            toPositiveInteger(line.quantity ?? line.qty) || 1;
+
+        const productId = getProductId(line);
+        const variantId = getVariantId(line);
+        const productName = getProductName(line);
+
+        if (!productId) {
+            throw new Error(
+                `Missing product_id for "${productName || "POS item"}".`
+            );
+        }
 
         if (variantId) {
             const [result] = await connection.execute(
                 `UPDATE product_variants pv
-                     INNER JOIN products p ON p.id = pv.product_id
-                     SET pv.stock = GREATEST(pv.stock - ?, 0),
-                         p.stock = GREATEST(p.stock - ?, 0)
-                 WHERE pv.id = ? AND p.store_id = ?`,
-                [qty, qty, variantId, storeId]
-            );
-
-            if (result.affectedRows > 0) continue;
-        }
-
-        if (productId && variantTokens.length > 0) {
-            const tokenWhere = variantTokens
-                .map(() => "LOWER(CAST(pv.variant_values AS CHAR)) LIKE ?")
-                .join(" AND ");
-
-            const tokenValues = variantTokens.map((token) => `%${token}%`);
-
-            const [result] = await connection.execute(
-                `UPDATE product_variants pv
-                     INNER JOIN products p ON p.id = pv.product_id
-                     SET pv.stock = GREATEST(pv.stock - ?, 0),
-                         p.stock = GREATEST(p.stock - ?, 0)
-                 WHERE pv.product_id = ?
+                 INNER JOIN products p ON p.id = pv.product_id
+                 SET
+                    pv.stock = pv.stock - ?,
+                    p.stock = p.stock - ?
+                 WHERE pv.id = ?
+                   AND p.id = ?
                    AND p.store_id = ?
-                   AND ${tokenWhere}`,
-                [qty, qty, productId, storeId, ...tokenValues]
+                   AND p.branch_id = ?
+                   AND pv.stock >= ?
+                   AND p.stock >= ?`,
+                [
+                    quantity,
+                    quantity,
+                    variantId,
+                    productId,
+                    storeId,
+                    branchId,
+                    quantity,
+                    quantity,
+                ]
             );
 
-            if (result.affectedRows > 0) continue;
+            if (result.affectedRows === 0) {
+                throw new Error(
+                    `Insufficient stock or invalid variant for "${productName}".`
+                );
+            }
+
+            continue;
         }
 
-        if (productName && variantTokens.length > 0) {
-            const tokenWhere = variantTokens
-                .map(() => "LOWER(CAST(pv.variant_values AS CHAR)) LIKE ?")
-                .join(" AND ");
+        const [result] = await connection.execute(
+            `UPDATE products
+             SET stock = stock - ?
+             WHERE id = ?
+               AND store_id = ?
+               AND branch_id = ?
+               AND stock >= ?`,
+            [
+                quantity,
+                productId,
+                storeId,
+                branchId,
+                quantity,
+            ]
+        );
 
-            const tokenValues = variantTokens.map((token) => `%${token}%`);
-
-            const [result] = await connection.execute(
-                `UPDATE product_variants pv
-                     INNER JOIN products p ON p.id = pv.product_id
-                     SET pv.stock = GREATEST(pv.stock - ?, 0),
-                         p.stock = GREATEST(p.stock - ?, 0)
-                 WHERE LOWER(p.name) = LOWER(?)
-                   AND p.store_id = ?
-                   AND ${tokenWhere}`,
-                [qty, qty, productName, storeId, ...tokenValues]
-            );
-
-            if (result.affectedRows > 0) continue;
-        }
-
-        if (productId) {
-            await connection.execute(
-                `UPDATE products
-                 SET stock = GREATEST(stock - ?, 0)
-                 WHERE id = ? AND store_id = ?`,
-                [qty, productId, storeId]
+        if (result.affectedRows === 0) {
+            throw new Error(
+                `Insufficient stock or invalid product for "${productName || productId}".`
             );
         }
     }
@@ -244,14 +333,24 @@ exports.handler = async (event) => {
         "Content-Type": "application/json",
     };
 
-    const method = event?.requestContext?.http?.method || event.httpMethod;
-    if (method === "OPTIONS") return { statusCode: 204, headers };
+    const method =
+        event?.requestContext?.http?.method ||
+        event?.httpMethod;
+
+    if (method === "OPTIONS") {
+        return {
+            statusCode: 204,
+            headers,
+            body: "",
+        };
+    }
 
     let body = {};
+
     try {
         body = JSON.parse(event.body || "{}");
     } catch {
-        return badRequest(headers, "Invalid JSON body");
+        return badRequest(headers, "Invalid JSON body.");
     }
 
     const rawAction = toSafeString(body.action, 80);
@@ -264,202 +363,369 @@ exports.handler = async (event) => {
         checkout: "create_order",
 
         deduct_stock: "decrease_stock",
-        decrease_stock: "decrease_stock",
         reduce_stock: "decrease_stock",
         update_stock: "decrease_stock",
         decrement_stock: "decrease_stock",
-        update_variant_stock: "decrease_stock",
-        decrease_variant_stock: "decrease_stock",
-        update_inventory_stock: "decrease_stock",
-        update_product_stock: "decrease_stock",
-        decrease_product_stock: "decrease_stock",
-        deduct_product_stock: "decrease_stock",
-        adjust_stock: "decrease_stock",
-        update_inventory: "decrease_stock",
     };
 
-    let action = actionAliases[normalizedAction] || normalizedAction;
-
-    if (
-        action !== "decrease_stock" &&
-        (normalizedAction.includes("stock") || normalizedAction.includes("inventory")) &&
-        getOrderLines(body).length > 0
-    ) {
-        action = "decrease_stock";
-    }
-
-    console.log("POS rawAction:", rawAction);
-    console.log("POS normalizedAction:", normalizedAction);
-    console.log("POS mapped action:", action);
-    console.log("POS body keys:", Object.keys(body));
+    const action = actionAliases[normalizedAction] || normalizedAction;
 
     let connection;
-
-
 
     try {
         connection = await mysql.createConnection(dbConfig);
 
-        // --- AUTH ---
-        const authHeader = event?.headers?.authorization || event?.headers?.Authorization || "";
-        if (!authHeader) return unauthorized(headers, "No token provided");
+        const authHeader =
+            event?.headers?.authorization ||
+            event?.headers?.Authorization ||
+            "";
 
-        let store_id;
+        if (!authHeader) {
+            return unauthorized(headers, "No token provided.");
+        }
+
+        let storeId;
+        let tokenBranchId = null;
+        let tokenRole = "";
+
         try {
-            const token = authHeader.replace("Bearer ", "");
+            const token = authHeader.replace(/^Bearer\s+/i, "");
             const decoded = jwt.verify(token, JWT_SECRET);
-            store_id = Number(decoded.store_id);
+
+            storeId = Number(decoded.store_id);
+            tokenBranchId = decoded.branch_id
+                ? Number(decoded.branch_id)
+                : null;
+            tokenRole = String(decoded.role || "").toLowerCase();
         } catch {
-            return unauthorized(headers, "Invalid token");
+            return unauthorized(headers, "Invalid token.");
         }
 
-        if (!Number.isInteger(store_id) || store_id <= 0) {
-            return unauthorized(headers, "Invalid store in token");
+        if (!Number.isInteger(storeId) || storeId <= 0) {
+            return unauthorized(headers, "Invalid store in token.");
         }
 
-        const storeExists = await ensureStoreExists(connection, store_id);
-        if (!storeExists) return badRequest(headers, "Store account not found");
+        const storeExists = await ensureStoreExists(connection, storeId);
 
-        // --- CREATE ---
+        if (!storeExists) {
+            return badRequest(headers, "Store account not found.");
+        }
+
+        const isBranchUser =
+            tokenRole === "manager" ||
+            tokenRole === "staff";
+
+        if (isBranchUser) {
+            if (!Number.isInteger(tokenBranchId) || tokenBranchId <= 0) {
+                return badRequest(
+                    headers,
+                    "Missing branch_id in token for this user."
+                );
+            }
+
+            const branchExists = await ensureBranchBelongsToStore(
+                connection,
+                tokenBranchId,
+                storeId
+            );
+
+            if (!branchExists) {
+                return badRequest(
+                    headers,
+                    "Invalid branch for this store."
+                );
+            }
+        }
+
         if (action === "create_order") {
             const orderId = toSafeString(body.order_id, 255);
-            const customerName = toSafeString(body.customer_name, 120) || "Customer";
-            const item = toSafeString(
-                body.item || formatOrderItems(body.items || body.order_items || body.cart),
-                255
-            );
+            const customerName =
+                toSafeString(body.customer_name, 120) ||
+                "Customer";
+
             const total = toNumber(body.total) ?? 0;
 
-            // normalize order_date -> YYYY-MM-DD (fallback to today)
-            const normalizedOrderDate =
-                toISODate(body.order_date) || new Date().toISOString().slice(0, 10);
+            const orderDate =
+                toISODate(body.order_date) ||
+                new Date().toISOString().slice(0, 10);
 
-            if (!orderId) return badRequest(headers, "order_id is required");
+            const orderLines = getOrderLines(body);
 
-            const [result] = await connection.execute(
-                `INSERT INTO orders
-                     (order_id, store_id, customer_name, item, total, order_date)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [orderId, store_id, customerName, item, total, normalizedOrderDate]
-            );
-
-            if (result.affectedRows === 0) {
-                return serverError(headers);
+            if (!orderId) {
+                return badRequest(headers, "order_id is required.");
             }
 
-            const orderLines = getOrderLines({
-                ...body,
-                item,
-            });
-
-            if (orderLines.length > 0) {
-                await decreaseStockForOrder(connection, store_id, orderLines);
+            if (!isBranchUser || !tokenBranchId) {
+                return badRequest(
+                    headers,
+                    "Only an assigned Manager or Staff branch can create POS orders."
+                );
             }
 
-            const [rows] = await connection.execute(
-                `SELECT order_id AS orderId, store_id AS storeId, customer_name AS customerName,
-                        item, total, order_date AS orderDate, created_at AS createdAt
-                 FROM orders WHERE order_id = ? LIMIT 1`,
-                [orderId]
+            if (orderLines.length === 0) {
+                return badRequest(
+                    headers,
+                    "At least one POS item is required."
+                );
+            }
+
+            const item = toSafeString(
+                body.item || formatOrderItems(orderLines),
+                255
             );
 
-            return { statusCode: 201, headers, body: JSON.stringify({ success: true, order: rows[0] }) };
+            await connection.beginTransaction();
+
+            try {
+                await connection.execute(
+                    `INSERT INTO orders
+                        (
+                            order_id,
+                            store_id,
+                            branch_id,
+                            customer_name,
+                            item,
+                            total,
+                            order_date
+                        )
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        orderId,
+                        storeId,
+                        tokenBranchId,
+                        customerName,
+                        item,
+                        total,
+                        orderDate,
+                    ]
+                );
+
+                await insertOrderItems(
+                    connection,
+                    orderId,
+                    orderLines
+                );
+
+                await decreaseStockForOrder(
+                    connection,
+                    storeId,
+                    tokenBranchId,
+                    orderLines
+                );
+
+                await connection.commit();
+
+                const [rows] = await connection.execute(
+                    `SELECT
+                         order_id AS orderId,
+                         store_id AS storeId,
+                         branch_id AS branchId,
+                         customer_name AS customerName,
+                         item,
+                         total,
+                         order_date AS orderDate,
+                         created_at AS createdAt
+                     FROM orders
+                     WHERE order_id = ?
+                         LIMIT 1`,
+                    [orderId]
+                );
+
+                return jsonResponse(201, headers, {
+                    success: true,
+                    order: rows[0],
+                });
+            } catch (error) {
+                await connection.rollback();
+                throw error;
+            }
         }
-        // --- DECREASE STOCK ---
+
         if (action === "decrease_stock") {
             const orderLines = getOrderLines(body);
 
             if (orderLines.length === 0) {
-                return badRequest(headers, "No items found for stock update");
+                return badRequest(
+                    headers,
+                    "No items found for stock update."
+                );
             }
 
-            await decreaseStockForOrder(connection, store_id, orderLines);
+            if (!isBranchUser || !tokenBranchId) {
+                return badRequest(
+                    headers,
+                    "Only an assigned Manager or Staff branch can update POS stock."
+                );
+            }
 
-            return {
-                statusCode: 200,
-                headers,
-                body: JSON.stringify({ success: true }),
-            };
+            await connection.beginTransaction();
+
+            try {
+                await decreaseStockForOrder(
+                    connection,
+                    storeId,
+                    tokenBranchId,
+                    orderLines
+                );
+
+                await connection.commit();
+
+                return jsonResponse(200, headers, {
+                    success: true,
+                });
+            } catch (error) {
+                await connection.rollback();
+                throw error;
+            }
         }
 
-        // --- READ ---
         if (action === "get_orders") {
-            const [rows] = await connection.execute(
-                `SELECT order_id AS orderId, store_id AS storeId, customer_name AS customerName,
-                        item, total, order_date AS orderDate, created_at AS createdAt
-                 FROM orders WHERE store_id = ?
-                 ORDER BY created_at DESC, order_id DESC`,
-                [store_id]
-            );
-            return { statusCode: 200, headers, body: JSON.stringify({ orders: rows }) };
+            let query = `
+                SELECT
+                    order_id AS orderId,
+                    store_id AS storeId,
+                    branch_id AS branchId,
+                    customer_name AS customerName,
+                    item,
+                    total,
+                    order_date AS orderDate,
+                    created_at AS createdAt
+                FROM orders
+                WHERE store_id = ?
+            `;
+
+            const params = [storeId];
+
+            if (isBranchUser && tokenBranchId) {
+                query += " AND branch_id = ?";
+                params.push(tokenBranchId);
+            }
+
+            query += " ORDER BY created_at DESC, order_id DESC";
+
+            const [rows] = await connection.execute(query, params);
+
+            return jsonResponse(200, headers, {
+                success: true,
+                orders: rows,
+            });
         }
 
-        // --- UPDATE ---
         if (action === "update_order") {
             const orderId = toSafeString(body.order_id, 255);
-            if (!orderId) return badRequest(headers, "Invalid order_id");
 
-            const customerName = toSafeString(body.customer_name, 120) || "Customer";
+            if (!orderId) {
+                return badRequest(headers, "Invalid order_id.");
+            }
+
+            const customerName =
+                toSafeString(body.customer_name, 120) ||
+                "Customer";
+
             const item = toSafeString(body.item, 255);
             const total = toNumber(body.total) ?? 0;
 
-            // normalize order_date -> YYYY-MM-DD (fallback to today)
-            const normalizedOrderDate =
-                toISODate(body.order_date) || new Date().toISOString().slice(0, 10);
+            const orderDate =
+                toISODate(body.order_date) ||
+                new Date().toISOString().slice(0, 10);
 
-            const [result] = await connection.execute(
-                `UPDATE orders
-                 SET customer_name=?, item=?, total=?, order_date=?
-                 WHERE order_id=? AND store_id=?`,
-                [customerName, item, total, normalizedOrderDate, orderId, store_id]
-            );
+            let query = `
+                UPDATE orders
+                SET
+                    customer_name = ?,
+                    item = ?,
+                    total = ?,
+                    order_date = ?
+                WHERE order_id = ?
+                  AND store_id = ?
+            `;
 
-            if (result.affectedRows === 0) {
-                return { statusCode: 404, headers, body: JSON.stringify({ error: "Order not found" }) };
+            const params = [
+                customerName,
+                item,
+                total,
+                orderDate,
+                orderId,
+                storeId,
+            ];
+
+            if (isBranchUser && tokenBranchId) {
+                query += " AND branch_id = ?";
+                params.push(tokenBranchId);
             }
 
-            return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            const [result] = await connection.execute(query, params);
+
+            if (result.affectedRows === 0) {
+                return notFound(headers, "Order not found.");
+            }
+
+            return jsonResponse(200, headers, {
+                success: true,
+            });
         }
 
-        // --- DELETE ---
         if (action === "delete_order") {
             const orderId = toSafeString(body.order_id, 255);
-            if (!orderId) return badRequest(headers, "Invalid order_id");
 
-            const [result] = await connection.execute(
-                `DELETE FROM orders WHERE order_id=? AND store_id=?`,
-                [orderId, store_id]
-            );
-
-            if (result.affectedRows === 0) {
-                return { statusCode: 404, headers, body: JSON.stringify({ error: "Order not found" }) };
+            if (!orderId) {
+                return badRequest(headers, "Invalid order_id.");
             }
 
-            return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            await connection.beginTransaction();
+
+            try {
+                let lookupQuery = `
+                    SELECT order_id
+                    FROM orders
+                    WHERE order_id = ?
+                      AND store_id = ?
+                `;
+
+                const lookupParams = [orderId, storeId];
+
+                if (isBranchUser && tokenBranchId) {
+                    lookupQuery += " AND branch_id = ?";
+                    lookupParams.push(tokenBranchId);
+                }
+
+                const [orders] = await connection.execute(
+                    lookupQuery,
+                    lookupParams
+                );
+
+                if (orders.length === 0) {
+                    await connection.rollback();
+                    return notFound(headers, "Order not found.");
+                }
+
+                await connection.execute(
+                    "DELETE FROM order_items WHERE order_id = ?",
+                    [orderId]
+                );
+
+                await connection.execute(
+                    "DELETE FROM orders WHERE order_id = ? AND store_id = ?",
+                    [orderId, storeId]
+                );
+
+                await connection.commit();
+
+                return jsonResponse(200, headers, {
+                    success: true,
+                });
+            } catch (error) {
+                await connection.rollback();
+                throw error;
+            }
         }
 
-        // --- IGNORE EXTRA POS FOLLOW-UP ACTIONS ---
-        console.log("POS ignored unsupported action:", {
-            rawAction,
-            normalizedAction,
-            mappedAction: action,
-            bodyKeys: Object.keys(body),
-        });
-
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-                success: true,
-                ignored: true,
-                action: rawAction || null,
-            }),
-        };
-
-    } catch (err) {
-        console.error("Lambda error:", err);
-        return serverError(headers);
+        return badRequest(headers, "Invalid action.");
+    } catch (error) {
+        return serverError(headers, error);
     } finally {
-        if (connection) await connection.end();
+        if (connection) {
+            await connection.end();
+        }
     }
 };
